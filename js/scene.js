@@ -68,21 +68,18 @@ export class SceneManager {
 
   async loadRoomData() {
     try {
-      console.log('SceneManager: Starting to fetch data.json');
       // Add cache-busting query parameter with current timestamp
       const cacheBuster = `?t=${new Date().getTime()}`;
       const response = await fetch('data.json' + cacheBuster, {
         cache: 'no-store' // Force bypass of cache
       });
+      
       if (!response.ok) {
         console.error(`HTTP error loading room data: ${response.status} ${response.statusText}`);
         throw new Error(`HTTP error: ${response.status}`);
       }
       
-      console.log('SceneManager: Successfully fetched data.json, parsing...');
       this.roomData = await response.json();
-      console.log('SceneManager: data.json parsed successfully');
-      console.log('Room data loaded:', this.roomData.metadata.roomName);
       
       // Set up frames for player
       this.setupFrames();

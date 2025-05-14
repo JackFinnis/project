@@ -9,7 +9,7 @@ struct ExportableMetadata: Codable {
     let roomName: String
     let device: String
     var meshFrameRate: Double
-    var fishFrameRate: Double
+    // fishFrameRate removed as it's always 90
 }
 
 struct ExportableMesh: Codable {

@@ -29,7 +29,7 @@ class FishRoomPlayback {
       }
       
       // Set up UI controls with frame data
-      this.controlsManager.setFrames(sceneData.frames, sceneData.metadata);
+      this.controlsManager.setFrames(sceneData.frames);
       
       // Display the first frame
       this.sceneManager.updateFrame(0);
@@ -49,7 +49,7 @@ class FishRoomPlayback {
   displayError(errorType) {
     // Error handling currently logs to console. UI display could be added here if needed.
     console.error(errorType);
-    this.controlsManager.setFrames([], {});
+    this.controlsManager.setFrames([]);
     this.controlsManager.isPlaying = false;
     this.sceneManager.render();
     this.startRenderLoop();

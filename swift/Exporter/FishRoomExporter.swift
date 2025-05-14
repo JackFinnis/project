@@ -15,14 +15,11 @@ class FishRoomExporter: ObservableObject {
 
     private let dateFormatter: ISO8601DateFormatter
     private let roomName: String
-    private let targetFishFrameRate: Double
 
     init(roomName: String = "VisionOS_Scene", 
-         meshRecordInterval: TimeInterval = 1.0,
-         targetFishFrameRate: Double = 60.0) {
+         meshRecordInterval: TimeInterval = 1.0) {
         self.roomName = roomName
         self.meshRecordInterval = meshRecordInterval
-        self.targetFishFrameRate = targetFishFrameRate
         
         self.dateFormatter = ISO8601DateFormatter()
         self.dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -36,8 +33,7 @@ class FishRoomExporter: ObservableObject {
                 captureDate: dateFormatter.string(from: Date()), // Placeholder, set on start
                 roomName: self.roomName,
                 device: "Apple Vision Pro",
-                meshFrameRate: 0, // Will be calculated
-                fishFrameRate: self.targetFishFrameRate
+                meshFrameRate: 0 // Will be calculated
             ),
             meshes: [],
             fishFrames: [],

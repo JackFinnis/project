@@ -4,7 +4,7 @@ export class ControlsManager {
     this.onFrameUpdate = onFrameUpdate;
     this.isPlaying = true;
     this.frameIndex = 0;
-    this.frameRate = 30; // Default frame rate 
+    this.frameRate = 90; // Fixed frame rate
     this.playbackSpeed = 1.0;
     this.frameInterval = 1000 / this.frameRate;
     this.lastTime = 0;
@@ -66,26 +66,14 @@ export class ControlsManager {
     this.playPauseBtn.textContent = this.isPlaying ? 'Pause' : 'Play';
   }
 
-  setFrames(frames, metadata) {
+  setFrames(frames) {
     // Ensure frames is an array
     this.frames = Array.isArray(frames) ? frames : [];
     console.log(`Setting up controls with ${this.frames.length} frames`);
     
-    // Determine frame rate based on available metadata
-    this.frameRate = 30; // Default frame rate
-    if (metadata) {
-      if (typeof metadata.fishFrameRate === 'number' && metadata.fishFrameRate > 0) {
-        this.frameRate = metadata.fishFrameRate;
-        console.log(`Using fishFrameRate from metadata: ${this.frameRate}`);
-      } else {
-        // If fishFrameRate is not available, try to calculate from timestamps
-        console.log('fishFrameRate not found in metadata, attempting to calculate from frame timestamps.');
-        this.determineFrameRateFromFrames(); // determineFrameRateFromFrames will set this.frameRate if successful
-      }
-    } else {
-      console.log('No metadata provided, attempting to calculate frame rate from frame timestamps.');
-      this.determineFrameRateFromFrames();
-    }
+    // Frame rate is always 90 fps
+    this.frameRate = 90;
+    console.log(`Using fixed frame rate: ${this.frameRate}`);
     
     this.updateFrameInterval();
 
@@ -106,36 +94,6 @@ export class ControlsManager {
     }
 
     this.updateUI();
-  }
-  
-  determineFrameRateFromFrames() {
-    // If we have timestamps, try to calculate frame rate
-    if (this.frames.length >= 2 && 
-        this.frames[0].timestamp !== undefined && 
-        this.frames[1].timestamp !== undefined) {
-      const samples = Math.min(10, this.frames.length - 1);
-      let totalInterval = 0;
-      for (let i = 0; i < samples; i++) {
-        const interval = this.frames[i+1].timestamp - this.frames[i].timestamp;
-        if (interval > 0) { // Only consider positive intervals
-            totalInterval += interval;
-        } else {
-            // If interval is zero or negative, it might skew calculation or indicate bad data.
-            // Depending on strictness, could reduce sample count or log warning.
-            console.warn(`Invalid frame interval detected between frame ${i} and ${i+1}: ${interval}`);
-        }
-      }
-      // Only calculate if we had valid samples contributing to totalInterval
-      if (samples > 0 && totalInterval > 0) {
-        const avgInterval = totalInterval / samples;
-        this.frameRate = Math.round(1 / avgInterval);
-        console.log(`Calculated frame rate from timestamps: ${this.frameRate} (avgInterval: ${avgInterval.toFixed(4)}s)`);
-      } else {
-        console.warn('Could not calculate frame rate from timestamps, using default:', this.frameRate);
-      }
-    } else {
-      console.warn('Not enough frame data with timestamps to calculate frame rate, using default:', this.frameRate);
-    }
   }
 
   update(time) {

@@ -1,13 +1,4 @@
 {
-  "metadata": {
-    "version": "1.2",
-    "duration": 10,
-    "roomName": "Grand Aquarium",
-    "captureDate": "2024-03-20T10:00:00Z",
-    "device": "Apple Vision Pro",
-    "meshFrameRate": 1,
-    "fishFrameRate": 90
-  },
   "meshes": [
     {
       "timestamp": 0.0,
@@ -171,17 +162,5 @@
         }
       ]
     }
-  ],
-  "fishTypes": {
-    "goldfish": {
-      "modelRef": "models/goldfish.glb",
-      "scale": 0.05,
-      "color": [1.0, 0.7, 0.0]
-    },
-    "clownfish": {
-      "modelRef": "models/clownfish.glb",
-      "scale": 0.04,
-      "color": [1.0, 0.5, 0.0, 1.0]
-    }
-  }
+  ]
 }
