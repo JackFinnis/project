@@ -11,7 +11,7 @@ export class SceneManager {
     this.fishGroup = null;
     this.roomData = null;
     this.currentFrameIndex = 0;
-    this.currentMeshIndex = 0;
+    this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered meshes
     this.setupScene();
   }
 
@@ -150,34 +150,83 @@ export class SceneManager {
   }
 
   updateMesh(timestamp) {
-    if (!this.roomData || !this.roomData.meshes || this.roomData.meshes.length === 0) {
-      // No mesh data available, or it's handled differently.
-      // console.warn('No explicit mesh data found in roomData.meshes. Ensure scene is set up if meshes are static or handled elsewhere.');
-      // If meshes are expected, this might indicate an issue with data or loading.
-      // If no dynamic meshes, meshGroup might be populated once at setup.
-      return;
+    // Ensure renderedMeshStates is initialized (it should be by the constructor)
+    if (!this.renderedMeshStates) {
+        this.renderedMeshStates = new Map();
+    }
+
+    const latestMeshesById = new Map();
+
+    // Handle cases where roomData or roomData.meshes is not suitable for processing
+    if (!this.roomData || !Array.isArray(this.roomData.meshes) || this.roomData.meshes.length === 0) {
+        if (this.renderedMeshStates.size > 0) {
+            // Meshes were previously rendered, but now there are no meshes in data source. Clear them.
+            this.clearMeshGroup();
+            this.renderedMeshStates = new Map(); // Reset state
+        }
+        // No meshes in data source, and (now) no meshes rendered. Nothing more to do.
+        return;
+    }
+
+    // Populate latestMeshesById from roomData.meshes
+    for (const meshUpdate of this.roomData.meshes) {
+        // Basic validation for meshUpdate object structure
+        if (typeof meshUpdate.id === 'undefined' || typeof meshUpdate.timestamp === 'undefined') {
+            // console.warn('Skipping mesh update due to missing id or timestamp:', meshUpdate);
+            continue; 
+        }
+
+        if (meshUpdate.timestamp <= timestamp) {
+            // If this mesh ID is not seen, or this update is newer/same time as stored one
+            if (!latestMeshesById.has(meshUpdate.id) ||
+                meshUpdate.timestamp >= latestMeshesById.get(meshUpdate.id).timestamp) {
+                latestMeshesById.set(meshUpdate.id, meshUpdate);
+            }
+        }
+    }
+
+    // Perform change detection to see if a re-render is necessary
+    let hasChanged = false;
+    if (this.renderedMeshStates.size !== latestMeshesById.size) {
+        hasChanged = true;
+    } else {
+        // Sizes are the same, check for content differences (updates or replacements)
+        for (const [id, meshData] of latestMeshesById) {
+            if (!this.renderedMeshStates.has(id) ||
+                this.renderedMeshStates.get(id) !== meshData.timestamp) {
+                hasChanged = true;
+                break;
+            }
+        }
     }
     
-    // Find the appropriate mesh for this timestamp
-    let meshIndex = 0;
-    for (let i = 0; i < this.roomData.meshes.length; i++) {
-      if (this.roomData.meshes[i].timestamp <= timestamp) {
-        meshIndex = i;
-      } else {
-        break;
-      }
+    // If no meshes are selected for the current timestamp, but meshes were previously rendered,
+    // it means all previously rendered meshes are now outdated or removed.
+    if (latestMeshesById.size === 0 && this.renderedMeshStates.size > 0) {
+        hasChanged = true; 
+    }
+
+    if (!hasChanged) {
+        return; // No changes detected, no visual update needed.
+    }
+
+    // Apply updates to the scene
+    this.clearMeshGroup(); // Clear all existing meshes from the group
+
+    const newRenderedStates = new Map(); // To store the state of meshes rendered in this update
+    if (latestMeshesById.size > 0) {
+        latestMeshesById.forEach(meshData => {
+            // Ensure meshData has the necessary properties for createRoom
+            if (meshData.vertices && meshData.triangles) { // id and timestamp already checked by earlier filter
+                this.createRoom(meshData); // createRoom adds the mesh to this.meshGroup
+                newRenderedStates.set(meshData.id, meshData.timestamp);
+            } else {
+                // console.warn('Skipping rendering of mesh due to incomplete data (missing vertices or triangles):', meshData.id, meshData.timestamp);
+            }
+        });
     }
     
-    // If mesh index hasn't changed, don't update the mesh
-    if (this.currentMeshIndex === meshIndex && this.meshGroup.children.length > 0) {
-      return;
-    }
-    
-    // Create new mesh
-    this.clearMeshGroup();
-    const meshData = this.roomData.meshes[meshIndex];
-    this.createRoom(meshData);
-    this.currentMeshIndex = meshIndex;
+    this.renderedMeshStates = newRenderedStates; // Update the record of currently rendered meshes
   }
 
   clearMeshGroup() {
