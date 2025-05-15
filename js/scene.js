@@ -217,11 +217,11 @@ export class SceneManager {
     if (latestMeshesById.size > 0) {
         latestMeshesById.forEach(meshData => {
             // Ensure meshData has the necessary properties for createRoom
-            if (meshData.vertices && meshData.triangles) { // id and timestamp already checked by earlier filter
+            if (meshData.vertices && meshData.faces) { // id and timestamp already checked by earlier filter
                 this.createRoom(meshData); // createRoom adds the mesh to this.meshGroup
                 newRenderedStates.set(meshData.id, meshData.timestamp);
             } else {
-                // console.warn('Skipping rendering of mesh due to incomplete data (missing vertices or triangles):', meshData.id, meshData.timestamp);
+                // console.warn('Skipping rendering of mesh due to incomplete data (missing vertices or faces):', meshData.id, meshData.timestamp);
             }
         });
     }
@@ -329,15 +329,15 @@ export class SceneManager {
   }
 
   createRoom(meshData) {
-    if (!meshData || !meshData.vertices || !meshData.triangles) {
+    if (!meshData || !meshData.vertices || !meshData.faces) {
       console.error('Invalid mesh data structure', meshData);
       return;
     }
     
-    // Create geometry from vertices and triangles
+    // Create geometry from vertices and faces
     const geometry = new THREE.BufferGeometry();
     const vertices = new Float32Array(meshData.vertices.flat());
-    const indices = new Uint32Array(meshData.triangles.flat());
+    const indices = new Uint32Array(meshData.faces.flat());
     
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
