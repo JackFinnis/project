@@ -9,6 +9,7 @@ export class SceneManager {
     this.controls = null;
     this.meshGroup = null;
     this.fishGroup = null;
+    this.activeFishMeshes = new Map(); // Added to track active fish by ID
     this.roomData = null;
     this.currentFrameIndex = 0;
     this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered meshes
@@ -70,7 +71,7 @@ export class SceneManager {
     try {
       // Add cache-busting query parameter with current timestamp
       const cacheBuster = `?t=${new Date().getTime()}`;
-      const response = await fetch('data.json' + cacheBuster, {
+      const response = await fetch('export.json' + cacheBuster, {
         cache: 'no-store' // Force bypass of cache
       });
       
@@ -245,86 +246,148 @@ export class SceneManager {
   }
 
   updateFish(frameIndex, timestamp) {
-    if (!this.roomData) return;
+    if (!this.roomData || !this.roomData.fishFrames || this.roomData.fishFrames.length === 0) {
+      // If no fish frame data, ensure all current fish are cleared
+      if (this.activeFishMeshes.size > 0) {
+        this.activeFishMeshes.forEach(fishMesh => {
+          if (fishMesh.geometry) fishMesh.geometry.dispose();
+          if (fishMesh.material) {
+            if (Array.isArray(fishMesh.material)) {
+              fishMesh.material.forEach(material => material.dispose());
+            } else {
+              fishMesh.material.dispose();
+            }
+          }
+          this.fishGroup.remove(fishMesh);
+        });
+        this.activeFishMeshes.clear();
+      }
+      return;
+    }
 
-    // Clear previous fish - more robust clearing
-    this.fishGroup.traverse(object => {
-      if (object.geometry) object.geometry.dispose();
-      if (object.material) {
-        if (Array.isArray(object.material)) {
-          object.material.forEach(material => material.dispose());
-        } else {
-          object.material.dispose();
+    let fishDataForCurrentTimestamp = null;
+
+    // Find the closest fishFrame entry for the current timestamp
+    // (Binary search logic as before)
+    let low = 0;
+    let high = this.roomData.fishFrames.length - 1;
+    let closestFrameData = this.roomData.fishFrames[0]; // Default to first frame
+    let minDiff = Number.MAX_VALUE;
+    let bestMatchIndex = 0;
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const frameTimestamp = this.roomData.fishFrames[mid].timestamp;
+      const diff = Math.abs(frameTimestamp - timestamp);
+
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestFrameData = this.roomData.fishFrames[mid];
+        bestMatchIndex = mid;
+      }
+
+      if (frameTimestamp < timestamp) {
+        low = mid + 1;
+      } else if (frameTimestamp > timestamp) {
+        high = mid - 1;
+      } else {
+        break; // Exact match found
+      }
+    }
+
+    // Check neighbors of the bestMatchIndex
+    for (let i = Math.max(0, bestMatchIndex - 1); i <= Math.min(this.roomData.fishFrames.length - 1, bestMatchIndex + 1); i++) {
+      const frame = this.roomData.fishFrames[i];
+      const diff = Math.abs(frame.timestamp - timestamp);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestFrameData = frame;
+      }
+    }
+    
+    fishDataForCurrentTimestamp = closestFrameData.fishStates || [];
+
+    const currentFrameFishIds = new Set();
+    if (fishDataForCurrentTimestamp) {
+      fishDataForCurrentTimestamp.forEach(fishData => {
+        if (fishData.id) { // Ensure fish has an ID
+          currentFrameFishIds.add(fishData.id);
         }
+      });
+    }
+
+    // Remove fish that are no longer in the current frame data
+    this.activeFishMeshes.forEach((fishMesh, fishId) => {
+      if (!currentFrameFishIds.has(fishId)) {
+        if (fishMesh.geometry) fishMesh.geometry.dispose();
+        if (fishMesh.material) {
+          // Material could be an array or single
+          if (Array.isArray(fishMesh.material)) {
+            fishMesh.material.forEach(m => m.dispose());
+          } else {
+            fishMesh.material.dispose();
+          }
+        }
+        this.fishGroup.remove(fishMesh);
+        this.activeFishMeshes.delete(fishId);
       }
     });
-    this.fishGroup.clear();
-    
-    let fishDataToRender = null;
-    
-    // Only use fishFrames for fish data
-    if (this.roomData.fishFrames && this.roomData.fishFrames.length > 0) {
-      if (timestamp !== undefined) {
-        // Binary search logic for closestFrame (as implemented before)
-        let low = 0;
-        let high = this.roomData.fishFrames.length - 1;
-        let closestFrame = this.roomData.fishFrames[0];
-        let minDiff = Number.MAX_VALUE;
 
-        // First, quickly find a candidate using binary search logic (exact match or closest)
-        // This loop finds an exact match or the insertion point
-        let bestMatchIndex = 0;
-        while(low <= high) {
-            const mid = Math.floor((low + high) / 2);
-            const frameTimestamp = this.roomData.fishFrames[mid].timestamp;
-            const diff = Math.abs(frameTimestamp - timestamp);
-
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestFrame = this.roomData.fishFrames[mid];
-                bestMatchIndex = mid;
-            }
-
-            if (frameTimestamp < timestamp) {
-                low = mid + 1;
-            } else if (frameTimestamp > timestamp) {
-                high = mid - 1;
-            } else {
-                // Exact match found
-                break;
-            }
+    // Add new fish or update existing ones
+    if (fishDataForCurrentTimestamp) {
+      fishDataForCurrentTimestamp.forEach(fishData => {
+        if (!fishData || !fishData.id || !fishData.position || !fishData.forward) {
+          console.warn('Invalid fish data entry (missing id, position, or forward):', fishData);
+          return; // Skip this fish
         }
-        
-        // Check neighbors of the bestMatchIndex from binary search, as it might not be the absolute closest
-        // if an exact match wasn't found. The binary search gets us in the vicinity.
-        for (let i = Math.max(0, bestMatchIndex - 1); i <= Math.min(this.roomData.fishFrames.length - 1, bestMatchIndex + 1); i++) {
-            const frame = this.roomData.fishFrames[i];
-            const diff = Math.abs(frame.timestamp - timestamp);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestFrame = frame;
+
+        if (this.activeFishMeshes.has(fishData.id)) {
+          // Fish exists, update it
+          const fishMesh = this.activeFishMeshes.get(fishData.id);
+          fishMesh.position.set(...fishData.position);
+
+          // Update orientation
+          if (Array.isArray(fishData.forward) && fishData.forward.length === 3) {
+            const forwardVector = new THREE.Vector3(...fishData.forward).normalize();
+            const defaultConeTipDirection = new THREE.Vector3(0, 1, 0); // Cone tip points along +Y
+            if (forwardVector.lengthSq() > 0.0001) {
+              if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
+                fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+              } else {
+                fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
+              }
             }
+          }
+          // Potentially update type/color if fish can change type while retaining ID
+          // For now, color is set at creation. If type changes, we might need to update material.
+           const fishType = fishData.type || 'default';
+           const fishColors = this._getFishColors(); // Use helper for colors
+           const newColor = fishColors[fishType] || fishColors['default'];
+           if (fishMesh.material.color.getHex() !== newColor) {
+             fishMesh.material.color.setHex(newColor);
+           }
+
+
+        } else {
+          // New fish, create and add it
+          const fishMesh = this._createFishMesh(fishData);
+          if (fishMesh) {
+            this.fishGroup.add(fishMesh);
+            this.activeFishMeshes.set(fishData.id, fishMesh);
+          }
         }
-        fishDataToRender = closestFrame.fish;
-      } else if (frameIndex !== undefined && frameIndex < this.roomData.fishFrames.length) {
-        // Fallback to direct index if timestamp is not available (should not happen in current flow)
-        fishDataToRender = this.roomData.fishFrames[frameIndex].fish;
-      }
-    } 
-    // Removed old format logic for fish in this.roomData.frames
+      });
+    }
     
-    // If we have fish data, render it
-    if (fishDataToRender && fishDataToRender.length > 0) {
-      // Only log periodically to reduce console spam
-      if (frameIndex % 90 === 0) {
-        console.log(`Rendering ${fishDataToRender.length} fish for frame ${frameIndex} at timestamp ${timestamp}`);
-      }
-      this.addFish(fishDataToRender);
-    } else {
-      // Reduced console spam for missing fish data, could be normal
-      if (frameIndex % 90 === 0) {
-        console.warn('No fish data found for frame', frameIndex, 'at timestamp', timestamp);
-      }
+    if (frameIndex % 90 === 0) { // Log periodically
+        const fishCount = fishDataForCurrentTimestamp ? fishDataForCurrentTimestamp.length : 0;
+        if (fishCount > 0) {
+            console.log(`Rendering ${fishCount} fish (IDs) for frame ${frameIndex} at timestamp ${timestamp}. Active meshes: ${this.activeFishMeshes.size}`);
+        } else if(this.activeFishMeshes.size > 0) { // Still active meshes but none in current data (they will be removed)
+             console.log(`No fish data for frame ${frameIndex} at ${timestamp}, will clear ${this.activeFishMeshes.size} active fish.`);
+        } else {
+            // console.warn('No fish data found for frame', frameIndex, 'at timestamp', timestamp);
+        }
     }
   }
 
@@ -348,73 +411,52 @@ export class SceneManager {
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
     const roomLines = new THREE.LineSegments(edges, lineMaterial);
     this.meshGroup.add(roomLines);
-    
-    // Add corner points
-    const pointsGeometry = new THREE.BufferGeometry();
-    pointsGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    const pointsMaterial = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.05,
-      sizeAttenuation: true
-    });
-    const cornerPoints = new THREE.Points(pointsGeometry, pointsMaterial);
-    this.meshGroup.add(cornerPoints);
   }
 
-  addFish(fishDataArray) {
-    if (!fishDataArray || !Array.isArray(fishDataArray) || fishDataArray.length === 0) {
-      return;
-    }
-    
-    // Predefined colors for fish types
-    const fishColors = {
-      'goldfish': 0xffa500, // Orange
-      'clownfish': 0xff5500, // Reddish-orange
+  // Helper function to define fish colors
+  _getFishColors() {
+    return {
+      'yellowtang': 0x00ff00, // Green
+      'clownfish': 0xff0000, // Red
+      'sardine': 0x0000ff, // Blue
       'default': 0x808080    // Grey for any other type
     };
-    
-    fishDataArray.forEach((fish) => {
-      if (!fish || !fish.position || !fish.forward) {
-        console.warn('Invalid fish data entry (missing position or forward):', fish);
-        return; // Skip this fish
-      }
-      
-      const fishType = fish.type || 'default';
-      const color = fishColors[fishType] || fishColors['default'];
-      const scale = 0.3; // Uniform scale for all cone fish
+  }
 
-      // Create a cone for the fish
-      const fishGeometry = new THREE.ConeGeometry(0.3 * scale, 0.8 * scale, 8); // Simple cone
-      const fishMaterial = new THREE.MeshPhongMaterial({ color });
-      const fishMesh = new THREE.Mesh(fishGeometry, fishMaterial);
+  // Helper function to create a single fish mesh
+  _createFishMesh(fishData) {
+    if (!fishData || !fishData.position || !fishData.forward || !fishData.id) {
+      console.warn('Invalid fish data for creation (missing id, position, or forward):', fishData);
+      return null;
+    }
+    
+    const fishColors = this._getFishColors();
+    const fishType = fishData.type || 'default';
+    const color = fishColors[fishType] || fishColors['default'];
+    const scale = 0.3; // Uniform scale
+
+    const fishGeometry = new THREE.ConeGeometry(0.3 * scale, 0.8 * scale, 8);
+    const fishMaterial = new THREE.MeshPhongMaterial({ color });
+    const fishMesh = new THREE.Mesh(fishGeometry, fishMaterial);
+    
+    fishMesh.userData.fishId = fishData.id; // Store ID if needed for debugging or direct access
+    
+    fishMesh.position.set(...fishData.position);
+    
+    if (Array.isArray(fishData.forward) && fishData.forward.length === 3) {
+      const forwardVector = new THREE.Vector3(...fishData.forward).normalize();
+      const defaultConeTipDirection = new THREE.Vector3(0, 1, 0); // Cone default tip
       
-      fishMesh.position.set(...fish.position);
-      
-      // New orientation logic using fish.forward
-      if (Array.isArray(fish.forward) && fish.forward.length === 3) {
-        const forwardVector = new THREE.Vector3(...fish.forward).normalize();
-        // Default cone orientation (tip pointing direction) is along +Y axis
-        const defaultConeTipDirection = new THREE.Vector3(0, 1, 0);
-        
-        if (forwardVector.lengthSq() > 0.0001) { // Check if not a zero vector
-          // Check if vectors are nearly anti-parallel (dot product close to -1)
-          if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
-            // Handle anti-parallel case: rotate 180 degrees around an arbitrary perpendicular axis (e.g., X-axis)
-            fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
-          } else {
-            fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
-          }
+      if (forwardVector.lengthSq() > 0.0001) {
+        if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
+          fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
         } else {
-          // console.warn('Fish forward vector is zero, using default orientation for fish:', fish);
-          // Optionally set a default orientation if forward vector is zero
+          fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
         }
-      } else {
-        console.warn('Invalid fish.forward vector format for fish:', fish);
       }
-      
-      fishMesh.scale.set(scale, scale, scale);
-      
-      this.fishGroup.add(fishMesh);
-    });
+    }
+    
+    fishMesh.scale.set(scale, scale, scale);
+    return fishMesh;
   }
 } 
