@@ -5,6 +5,7 @@ export class ControlsManager {
     this.isPlaying = true;
     this.frameIndex = 0;
     this.playbackSpeed = 1.0;
+    this.skipAmountFrames = 30; // Number of frames to skip with arrow keys
     
     this.lastRealWorldTime = 0; // Tracks performance.now()
     this.elapsedMovieTime = 0;  // Time elapsed within the movie's own timeline, scaled by speed
@@ -12,6 +13,8 @@ export class ControlsManager {
     this.firstFrameTimestamp = 0; // Timestamp of the very first frame, for reference
 
     this.frames = [];
+    this.totalMovieDurationSeconds = 0; // Added for time display
+    this.timeDisplayElement = null; // Added for time display
     
     this.setupControls();
     this.setupEventListeners();
@@ -19,34 +22,68 @@ export class ControlsManager {
 
   setupControls() {
     this.playPauseBtn = document.getElementById('playPauseBtn');
+    this.resetBtn = document.getElementById('resetBtn');
     this.timeline = document.getElementById('timeline');
     this.speedControl = document.getElementById('speedControl');
     this.speedValue = document.getElementById('speedValue');
+    this.timeDisplayElement = document.getElementById('timeDisplay'); // Added
   }
 
   setupEventListeners() {
     window.addEventListener('resize', () => this.sceneManager.onWindowResize());
     this.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
+    this.resetBtn.addEventListener('click', () => this.resetPlayback());
     this.timeline.addEventListener('input', (e) => this.onTimelineChange(e));
     this.speedControl.addEventListener('input', (e) => this.onSpeedChange(e));
+    window.addEventListener('keydown', (e) => this.handleKeydown(e)); // Added for spacebar
+  }
+
+  handleKeydown(event) {
+    if (event.code === 'Space') {
+      event.preventDefault(); // Prevent default spacebar action (e.g., scrolling, button click if focused)
+      this.togglePlayPause();
+    } else if (event.code === 'ArrowLeft') {
+      event.preventDefault();
+      this.skipFrames(-this.skipAmountFrames);
+    } else if (event.code === 'ArrowRight') {
+      event.preventDefault();
+      this.skipFrames(this.skipAmountFrames);
+    }
   }
 
   togglePlayPause() {
-    this.isPlaying = !this.isPlaying;
-    this.playPauseBtn.textContent = this.isPlaying ? 'Pause' : 'Play';
-    
-    if (this.isPlaying) {
-      this.play();
+    // Case: At the end of playback and currently paused, user wants to play again
+    if (!this.isPlaying && this.frames.length > 0 && this.frameIndex === this.frames.length - 1) {
+      this.frameIndex = 0;
+      this.elapsedMovieTime = 0; // Reset elapsed time to the beginning
+      this.currentFrameTimestamp = this.firstFrameTimestamp; // Reset current timestamp to the first frame's
+      this.onFrameUpdate(this.frameIndex); // Update scene to frame 0
+
+      this.isPlaying = true; // Set to play
+      // play() will be called below if this.isPlaying is true
+    } else {
+      // Standard toggle for play/pause
+      this.isPlaying = !this.isPlaying;
     }
+
+    if (this.isPlaying) {
+      this.play(); // Prepare for playback (e.g., sets lastRealWorldTime)
+    }
+    
+    this.updateUI(); // Update button text and other UI elements
   }
 
   play() {
-    // When resuming play, reset the real-world timer to prevent a large jump
     this.lastRealWorldTime = performance.now();
-    // Ensure currentFrameTimestamp is up-to-date if playback was paused
-    if (this.frames.length > 0 && this.frames[this.frameIndex]) {
-        this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
+    // Ensure currentFrameTimestamp is correctly set, especially if starting from frame 0
+    if (this.frameIndex === 0) {
+        this.currentFrameTimestamp = this.firstFrameTimestamp;
+        // elapsedMovieTime should be 0 if we are truly at frame 0 start
+    } else if (this.frames.length > 0 && this.frames[this.frameIndex]) {
+      this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
     }
+    // elapsedMovieTime is managed by onTimelineChange, resetPlayback, or the new logic in togglePlayPause for play-at-end.
+    // The main update loop advances elapsedMovieTime based on realWorldElapsed * playbackSpeed.
   }
 
   onTimelineChange(event) {
@@ -54,12 +91,11 @@ export class ControlsManager {
     if (newFrameIndex >= 0 && newFrameIndex < this.frames.length) {
         this.frameIndex = newFrameIndex;
         this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
-        // When scrubbing, reset elapsedMovieTime relative to the new frame's timestamp
         this.elapsedMovieTime = this.currentFrameTimestamp - this.firstFrameTimestamp;
-        this.updateUI();
-        this.onFrameUpdate(this.frameIndex); // Update immediately on scrub
+        this.updateUI(); // This will now update timeDisplay
+        this.onFrameUpdate(this.frameIndex); 
         if (!this.isPlaying) {
-             this.sceneManager.render(); // Re-render if paused
+             this.sceneManager.render(); 
         }
     }
   }
@@ -70,9 +106,46 @@ export class ControlsManager {
     // No frameInterval to update anymore
   }
 
+  formatTime(seconds) {
+    if (isNaN(seconds) || seconds < 0) return "0.0s";
+    return seconds.toFixed(1) + "s";
+  }
+
   updateUI() {
     this.timeline.value = this.frameIndex;
     this.playPauseBtn.textContent = this.isPlaying ? 'Pause' : 'Play';
+
+    if (this.timeDisplayElement && this.frames.length > 0) {
+      const currentTimeSeconds = this.elapsedMovieTime;
+      this.timeDisplayElement.textContent = `${this.formatTime(currentTimeSeconds)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+    } else if (this.timeDisplayElement) {
+      this.timeDisplayElement.textContent = `${this.formatTime(0)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+    }
+  }
+
+  resetPlayback() {
+    if (this.frames.length === 0) return;
+
+    this.frameIndex = 0;
+    if (this.frames[0] && this.frames[0].timestamp !== undefined) {
+      this.currentFrameTimestamp = this.frames[0].timestamp;
+    } else {
+      this.currentFrameTimestamp = 0; 
+    }
+    this.elapsedMovieTime = 0; 
+
+    this.isPlaying = false; 
+    
+    this.playbackSpeed = 1.0;
+    this.speedControl.value = this.playbackSpeed;
+    this.speedValue.textContent = this.playbackSpeed.toFixed(1) + 'x';
+
+    this.updateUI(); // This will update timeDisplay to 0.0s / Total_s
+    this.onFrameUpdate(this.frameIndex);
+
+    if (!this.isPlaying) { 
+         this.sceneManager.render(); 
+    }
   }
 
   setFrames(frames) {
@@ -82,23 +155,36 @@ export class ControlsManager {
     const hasFrames = this.frames.length > 0;
     
     if (hasFrames) {
-        this.firstFrameTimestamp = this.frames[0].timestamp;
-        this.currentFrameTimestamp = this.frames[0].timestamp;
-        this.elapsedMovieTime = 0; // Start at the beginning of the movie timeline
+        this.firstFrameTimestamp = this.frames[0].timestamp !== undefined ? this.frames[0].timestamp : 0;
+        if (this.frames.length > 1) {
+            const lastFrameTimestamp = this.frames[this.frames.length - 1].timestamp !== undefined ? this.frames[this.frames.length - 1].timestamp : this.firstFrameTimestamp;
+            this.totalMovieDurationSeconds = (lastFrameTimestamp - this.firstFrameTimestamp);
+        } else {
+            this.totalMovieDurationSeconds = 0.0; // Single frame movie has zero duration
+        }
+        this.currentFrameTimestamp = this.firstFrameTimestamp;
+        this.elapsedMovieTime = 0; 
         this.frameIndex = 0;
     } else {
         this.firstFrameTimestamp = 0;
         this.currentFrameTimestamp = 0;
         this.elapsedMovieTime = 0;
         this.frameIndex = 0;
+        this.totalMovieDurationSeconds = 0.0;
     }
     
     this.timeline.max = hasFrames ? this.frames.length - 1 : 0;
     this.timeline.value = 0;
     
     this.playPauseBtn.disabled = !hasFrames;
+    if (this.resetBtn) {
+      this.resetBtn.disabled = !hasFrames;
+    }
     this.timeline.disabled = !hasFrames;
     this.speedControl.disabled = !hasFrames;
+    if (this.timeDisplayElement) {
+        this.timeDisplayElement.textContent = `${this.formatTime(0)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+    }
 
     if (!hasFrames) {
       this.isPlaying = false;
@@ -113,70 +199,94 @@ export class ControlsManager {
 
   update(currentRealWorldTime) {
     if (!this.isPlaying || this.frames.length === 0) {
-      // If not playing, but an explicit scrub happened, the render is handled by onTimelineChange
-      // If playing and no frames, do nothing.
       return;
     }
 
-    if (!this.lastRealWorldTime) { // First update call after play starts
+    if (!this.lastRealWorldTime) { 
       this.lastRealWorldTime = currentRealWorldTime;
-      // Ensure currentFrameTimestamp and elapsedMovieTime are correctly initialized
       if (this.frames[this.frameIndex]) {
           this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
           this.elapsedMovieTime = this.currentFrameTimestamp - this.firstFrameTimestamp;
       }
+      // Update UI on first play to show correct initial time if starting from non-zero frame via scrubbing then play
+      this.updateUI(); 
       return;
     }
     
-    const realWorldElapsed = (currentRealWorldTime - this.lastRealWorldTime) / 1000.0; // in seconds
+    const realWorldElapsed = (currentRealWorldTime - this.lastRealWorldTime) / 1000.0; 
     this.lastRealWorldTime = currentRealWorldTime;
 
     this.elapsedMovieTime += realWorldElapsed * this.playbackSpeed;
 
-    // Target timestamp in the movie's own timeline
+    // Check for end of playback *before* finding the new frame index based on potentially overshot elapsedMovieTime
+    if (this.frameIndex === this.frames.length - 1 && this.elapsedMovieTime >= this.totalMovieDurationSeconds) {
+        this.elapsedMovieTime = this.totalMovieDurationSeconds; // Clamp elapsed time
+        this.currentFrameTimestamp = this.frames[this.frames.length - 1].timestamp; // Ensure current timestamp is last frame's
+        this.isPlaying = false; // Pause playback
+        // frameIndex is already correct (last frame)
+        this.updateUI(); // Update button to 'Play', timeline, and final time display
+        this.sceneManager.render(); // Ensure the very final state is rendered
+        return; // Stop further processing in this update cycle
+    }
+
     const targetMovieTimestamp = this.firstFrameTimestamp + this.elapsedMovieTime;
-
-    // Find the frame that best matches the targetMovieTimestamp
-    // We're looking for the frame with timestamp <= targetMovieTimestamp
-    // If all are > targetMovieTimestamp (e.g. playing backwards past the start), pick frame 0.
-    // If all are < targetMovieTimestamp (e.g. playing forwards past the end), pick last frame.
-
     let newFrameIndex = this.frameIndex;
 
     if (this.frames[this.frameIndex].timestamp < targetMovieTimestamp) {
-        // Playing forward, look for next frame
         for (let i = this.frameIndex; i < this.frames.length; i++) {
             if (this.frames[i].timestamp <= targetMovieTimestamp) {
                 newFrameIndex = i;
             } else {
-                // We've gone past the target, newFrameIndex is the last one that was <=
                 break; 
             }
         }
     } else {
-        // Playing backward or current frame is ahead of target
         for (let i = this.frameIndex; i >= 0; i--) {
             if (this.frames[i].timestamp <= targetMovieTimestamp) {
                 newFrameIndex = i;
                 break;
             }
-            // If loop finishes, means target is before first frame, newFrameIndex will be 0.
             newFrameIndex = 0; 
         }
     }
     
-    // Ensure newFrameIndex is within bounds
     newFrameIndex = Math.max(0, Math.min(this.frames.length - 1, newFrameIndex));
 
-    if (newFrameIndex !== this.frameIndex || !this.sceneManager.currentFrameIndexUpdated) { // also update if scene hasn't caught up
+    if (newFrameIndex !== this.frameIndex) {
       this.frameIndex = newFrameIndex;
       this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
-      // No need to adjust elapsedMovieTime here, it's the master clock.
+      this.onFrameUpdate(this.frameIndex);
+      this.updateUI();
+    } else if (this.isPlaying) {
+      // If playing and frameIndex hasn't changed (e.g. low speed), still update UI for time display
+      this.updateUI();
+    }
+  }
+
+  skipFrames(framesToSkip) {
+    if (this.frames.length === 0) return; // Do nothing if no frames
+
+    let newFrameIndex = this.frameIndex + framesToSkip;
+    
+    // Clamp newFrameIndex to be within bounds
+    newFrameIndex = Math.max(0, Math.min(newFrameIndex, this.frames.length - 1));
+
+    if (newFrameIndex !== this.frameIndex) {
+      this.frameIndex = newFrameIndex;
+      if (this.frames[this.frameIndex] && this.frames[this.frameIndex].timestamp !== undefined) {
+        this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
+      } else {
+        // Fallback if timestamp is missing, though unlikely if frames are well-formed
+        this.currentFrameTimestamp = this.firstFrameTimestamp + (this.frameIndex * (this.totalMovieDurationSeconds / this.frames.length)); 
+      }
+      this.elapsedMovieTime = this.currentFrameTimestamp - this.firstFrameTimestamp;
       
       this.onFrameUpdate(this.frameIndex);
       this.updateUI();
-      // sceneManager.currentFrameIndexUpdated can be a flag set by SceneManager after it renders this frame
-      // For now, we assume onFrameUpdate leads to an eventual render.
+
+      if (!this.isPlaying) {
+        this.sceneManager.render(); // Re-render if paused and frame changed
+      }
     }
   }
 } 
