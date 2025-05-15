@@ -374,8 +374,8 @@ export class SceneManager {
     };
     
     fishDataArray.forEach((fish) => {
-      if (!fish || !fish.position || !fish.rotation) {
-        console.warn('Invalid fish data entry:', fish);
+      if (!fish || !fish.position || !fish.forward) {
+        console.warn('Invalid fish data entry (missing position or forward):', fish);
         return; // Skip this fish
       }
       
@@ -390,13 +390,27 @@ export class SceneManager {
       
       fishMesh.position.set(...fish.position);
       
-      const rotationRadians = fish.rotation.map(deg => THREE.MathUtils.degToRad(deg));
-      fishMesh.rotation.set(rotationRadians[0], rotationRadians[1], rotationRadians[2]);
-      
-      // Orient cone to point along its +Z axis if data implies forward is Z
-      // The cone by default points up along the Y-axis.
-      // If your fish rotation data assumes Z is forward, rotate X by 90 degrees.
-      fishMesh.rotateX(Math.PI / 2); 
+      // New orientation logic using fish.forward
+      if (Array.isArray(fish.forward) && fish.forward.length === 3) {
+        const forwardVector = new THREE.Vector3(...fish.forward).normalize();
+        // Default cone orientation (tip pointing direction) is along +Y axis
+        const defaultConeTipDirection = new THREE.Vector3(0, 1, 0);
+        
+        if (forwardVector.lengthSq() > 0.0001) { // Check if not a zero vector
+          // Check if vectors are nearly anti-parallel (dot product close to -1)
+          if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
+            // Handle anti-parallel case: rotate 180 degrees around an arbitrary perpendicular axis (e.g., X-axis)
+            fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+          } else {
+            fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
+          }
+        } else {
+          // console.warn('Fish forward vector is zero, using default orientation for fish:', fish);
+          // Optionally set a default orientation if forward vector is zero
+        }
+      } else {
+        console.warn('Invalid fish.forward vector format for fish:', fish);
+      }
       
       fishMesh.scale.set(scale, scale, scale);
       
