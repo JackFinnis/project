@@ -79,7 +79,7 @@ export class ControlsManager {
     if (this.frameIndex === 0) {
         this.currentFrameTimestamp = this.firstFrameTimestamp;
         // elapsedMovieTime should be 0 if we are truly at frame 0 start
-    } else if (this.frames.length > 0 && this.frames[this.frameIndex]) {
+    } else if (this.frames[this.frameIndex]) { // Simplified: if frame at index exists
       this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
     }
     // elapsedMovieTime is managed by onTimelineChange, resetPlayback, or the new logic in togglePlayPause for play-at-end.
@@ -127,11 +127,8 @@ export class ControlsManager {
     if (this.frames.length === 0) return;
 
     this.frameIndex = 0;
-    if (this.frames[0] && this.frames[0].timestamp !== undefined) {
-      this.currentFrameTimestamp = this.frames[0].timestamp;
-    } else {
-      this.currentFrameTimestamp = 0; 
-    }
+    // currentFrameTimestamp will be the timestamp of the first frame, or 0 if no frames (handled by firstFrameTimestamp)
+    this.currentFrameTimestamp = this.firstFrameTimestamp; 
     this.elapsedMovieTime = 0; 
 
     this.isPlaying = false; 
@@ -150,7 +147,7 @@ export class ControlsManager {
 
   setFrames(frames) {
     this.frames = Array.isArray(frames) ? frames : [];
-    console.log(`ControlsManager: Setting up with ${this.frames.length} frames`);
+    // console.log(`ControlsManager: Setting up with ${this.frames.length} frames`);
     
     const hasFrames = this.frames.length > 0;
     
