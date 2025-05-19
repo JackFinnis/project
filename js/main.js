@@ -1,7 +1,7 @@
 import { SceneManager } from './scene.js';
 import { ControlsManager } from './controls.js';
 
-class FishRoomPlayback {
+class ARPlayback {
   constructor() {
     this.sceneManager = new SceneManager();
     this.controlsManager = new ControlsManager(
@@ -20,7 +20,6 @@ class FishRoomPlayback {
       // Assumes loadRoomData throws on actual load errors, and setupFrames ensures sceneData.frames exists.
       if (sceneData.frames.length === 0) {
         console.error("No frame data available after loading."); 
-        this.displayError("No Frame Data"); 
         return;
       }
       
@@ -30,17 +29,8 @@ class FishRoomPlayback {
       this.startRenderLoop();
       
     } catch (error) {
-      console.error('Failed to initialize FishRoomPlayback:', error);
-      this.displayError("Data Loading Error: " + error.message);
+      console.error('Failed to initialize ARPlayback:', error);
     }
-  }
-
-  displayError(errorType) {
-    console.error(errorType); 
-    this.controlsManager.setFrames([]);
-    this.controlsManager.isPlaying = false;
-    this.sceneManager.render();
-    this.startRenderLoop();
   }
 
   startRenderLoop() {
@@ -54,4 +44,4 @@ class FishRoomPlayback {
   }
 }
 
-new FishRoomPlayback(); 
+new ARPlayback(); 

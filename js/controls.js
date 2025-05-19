@@ -1,21 +1,30 @@
 export class ControlsManager {
   constructor(sceneManager, onFrameUpdate) {
-    this.sceneManager = sceneManager;
-    this.onFrameUpdate = onFrameUpdate;
-    this.isPlaying = true;
-    this.frameIndex = 0;
-    this.playbackSpeed = 1.0;
-    this.skipAmountFrames = 30; // Number of frames to skip with arrow keys
+    this.sceneManager = sceneManager; // Instance of SceneManager to interact with the 3D scene
+    this.onFrameUpdate = onFrameUpdate; // Callback function to notify when the current frame needs to be updated
+    this.isPlaying = true; // Boolean state indicating if playback is currently active
+    this.frameIndex = 0; // Current frame index in the playback sequence
+    this.playbackSpeed = 1.0; // Multiplier for playback speed (1.0 is normal speed)
+    this.skipAmountFrames = 30; // Number of frames to jump forward/backward with arrow keys
     
-    this.lastRealWorldTime = 0; // Tracks performance.now()
-    this.elapsedMovieTime = 0;  // Time elapsed within the movie's own timelineSlider, scaled by speed
-    this.currentFrameTimestamp = 0; // The actual timestamp of the current frame from data
-    this.firstFrameTimestamp = 0; // Timestamp of the very first frame, for reference
+    this.lastRealWorldTime = 0; // Timestamp of the last `performance.now()` call, used for calculating delta time
+    this.elapsedMovieTime = 0;  // Accumulated time within the movie's own timelineSlider, scaled by speed
+    this.currentFrameTimestamp = 0; // The actual timestamp of the current frame being displayed, from the data
+    this.firstFrameTimestamp = 0; // Timestamp of the very first frame in the data, used as a reference for elapsedMovieTime
 
-    this.frames = [];
-    this.totalMovieDurationSeconds = 0; // Added for time display
-    this.timelineValueElement = null; // Added for time display
+    this.frames = []; // Array of frame objects, typically { index: number, timestamp: number }
+    this.totalMovieDurationSeconds = 0; // Total duration of the movie/playback in seconds
+    this.timelineValueElement = null; // DOM element to display the current playback time and total duration
     
+    // UI Element References - these are assigned in setupControls
+    this.playPauseButton = null; // DOM element for the play/pause button
+    this.resetButton = null; // DOM element for the reset button
+    this.timelineSlider = null; // DOM element for the timeline range slider
+    this.speedSlider = null; // DOM element for the playback speed range slider
+    this.speedValue = null; // DOM element to display the current playback speed value
+    this.trailLengthSlider = null; // DOM element for the trail length range slider
+    this.trailLengthValue = null; // DOM element to display the current trail length value
+
     this.setupControls();
     this.setupEventListeners();
   }
@@ -26,19 +35,15 @@ export class ControlsManager {
     this.timelineSlider = document.getElementById('timelineSlider');
     this.speedSlider = document.getElementById('speedSlider');
     this.speedValue = document.getElementById('speedValue');
-    this.timelineValueElement = document.getElementById('timelineValue'); // Added
+    this.timelineValueElement = document.getElementById('timelineValue');
 
     // Trail Length Slider - Get from HTML
     this.trailLengthSlider = document.getElementById('trailLengthSlider');
     this.trailLengthValue = document.getElementById('trailLengthValue');
 
-    // Ensure sceneManager.maxTrailPoints is the source of truth for the initial value
-    // or that the HTML value is respected if sceneManager.maxTrailPoints is not yet set.
-    // For now, we'll keep the logic to set it from sceneManager if available,
-    // otherwise, it will use the HTML's default value.
-    const initialTrailLength = this.sceneManager.maxTrailPoints !== undefined ? this.sceneManager.maxTrailPoints : parseInt(this.trailLengthSlider.value, 10);
+    const initialTrailLength = this.sceneManager.maxTrailLength !== undefined ? this.sceneManager.maxTrailLength : parseInt(this.trailLengthSlider.value, 10);
     this.trailLengthSlider.value = initialTrailLength;
-    this.sceneManager.setTrailLength(initialTrailLength); // Ensure SceneManager is updated
+    this.sceneManager.maxTrailLength = initialTrailLength; // Ensure SceneManager is updated
     this.trailLengthValue.textContent = `${String(this.trailLengthSlider.value).padStart(3, '0')} points`;
   }
 
@@ -104,7 +109,7 @@ export class ControlsManager {
   ontimelineSliderChange(event) {
     const newFrameIndex = parseInt(event.target.value);
     if (newFrameIndex >= 0 && newFrameIndex < this.frames.length) {
-        this.sceneManager.clearAllTrails(); // Clear trails on scrub
+        this.sceneManager.resetSceneState(); // Reset full scene state on scrub
         this.frameIndex = newFrameIndex;
         this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
         this.elapsedMovieTime = this.currentFrameTimestamp - this.firstFrameTimestamp;
@@ -124,7 +129,7 @@ export class ControlsManager {
 
   onTrailLengthChange(event) {
     const newLength = parseInt(event.target.value, 10);
-    this.sceneManager.setTrailLength(newLength);
+    this.sceneManager.maxTrailLength = newLength;
     this.trailLengthValue.textContent = `${String(newLength).padStart(3, '0')} points`;
   }
 
@@ -287,7 +292,7 @@ export class ControlsManager {
   skipFrames(framesToSkip) {
     if (this.frames.length === 0) return; // Do nothing if no frames
 
-    this.sceneManager.clearAllTrails(); // Clear trails on skip
+    this.sceneManager.resetSceneState(); // Reset full scene state on skip
     let newFrameIndex = this.frameIndex + framesToSkip;
     
     // Clamp newFrameIndex to be within bounds

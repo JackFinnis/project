@@ -3,22 +3,22 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 export class SceneManager {
   constructor() {
-    this.scene = new THREE.Scene();
-    this.camera = null;
-    this.renderer = null;
-    this.controls = null;
-    this.meshGroup = null;
-    this.fishGroup = null;
-    this.handsGroup = new THREE.Group();
-    this.activeFishMeshes = new Map(); // Added to track active fish by ID
-    this.trailGroup = new THREE.Group(); // Group for fish trails
-    this.fishTrails = new Map(); // Map to store trail data { fishId: { line: THREE.Line, points: THREE.Vector3[] } }
-    this.maxTrailPoints = 200; // Max points per trail
-    this.roomData = null;
-    this.currentFrameIndex = 0;
-    this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered meshes
-    this.handUpdates = [];
-    this.handVisuals = { left: null, right: null };
+    this.scene = new THREE.Scene(); // Main Three.js scene object
+    this.camera = null; // Main perspective camera
+    this.renderer = null; // WebGL renderer
+    this.controls = null; // OrbitControls for camera manipulation
+    this.meshGroup = null; // THREE.Group for room geometry meshes
+    this.entityGroup = null; // THREE.Group for dynamic entities
+    this.handsGroup = new THREE.Group(); // THREE.Group for hand visualization spheres
+    this.activeEntityMeshes = new Map(); // Tracks active entity meshes by ID: { entityId: THREE.Mesh }
+    this.trailGroup = new THREE.Group(); // THREE.Group for entity trails
+    this.entityTrails = new Map(); // Stores trail data for each entity: { entityId: { line: THREE.Line, points: THREE.Vector3[] } }
+    this.maxTrailLength = 200; // Maximum number of points to store for an entity's trail (formerly initialTrailLength)
+    this.roomData = null; // Stores the loaded room data from export.json
+    this.currentFrameIndex = 0; // Index of the currently displayed frame
+    this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered room meshes
+    this.handUpdates = []; // Array of hand update data, sorted by timestamp
+    this.handVisuals = { left: null, right: null }; // Holds the THREE.Mesh objects for left and right hand visuals
     this.setupScene();
     this.setupHandVisuals();
   }
@@ -41,9 +41,9 @@ export class SceneManager {
     
     // Create groups for organization
     this.meshGroup = new THREE.Group();
-    this.fishGroup = new THREE.Group();
+    this.entityGroup = new THREE.Group();
     this.scene.add(this.meshGroup);
-    this.scene.add(this.fishGroup);
+    this.scene.add(this.entityGroup);
     this.scene.add(this.handsGroup);
     this.scene.add(this.trailGroup); // Add trailGroup to the scene
     
@@ -122,8 +122,8 @@ export class SceneManager {
 
   // Create frames array for playback
   setupFrames() {
-    // Assuming this.roomData and this.roomData.fishFrames are always available and fishFrames is an array
-    this.roomData.frames = this.roomData.fishFrames.map((frame, index) => {
+    // Assuming this.roomData and this.roomData.entityFrames are always available and entityFrames is an array
+    this.roomData.frames = this.roomData.entityFrames.map((frame, index) => {
       return {
         index: index,
         timestamp: frame.timestamp
@@ -144,7 +144,7 @@ export class SceneManager {
     const timestamp = frame.timestamp;
     
     this.updateMesh(timestamp);
-    this.updateFish(frameIndex, timestamp);
+    this.updateEntity(frameIndex, timestamp);
     this.updateHands(timestamp);
     
     this.currentFrameIndex = frameIndex;
@@ -223,50 +223,50 @@ export class SceneManager {
     this.meshGroup.clear();
   }
 
-  updateFish(frameIndex, timestamp) {
-    // Assuming this.roomData.fishFrames is always an array
-    if (this.roomData.fishFrames.length === 0) {
-      if (this.activeFishMeshes.size > 0) {
-        this.activeFishMeshes.forEach(fishMesh => {
-          if (fishMesh.geometry) fishMesh.geometry.dispose();
-          if (fishMesh.material) {
-            if (Array.isArray(fishMesh.material)) {
-              fishMesh.material.forEach(material => material.dispose());
+  updateEntity(frameIndex, timestamp) {
+    // Assuming this.roomData.entityFrames is always an array
+    if (this.roomData.entityFrames.length === 0) {
+      if (this.activeEntityMeshes.size > 0) {
+        this.activeEntityMeshes.forEach(entityMesh => {
+          if (entityMesh.geometry) entityMesh.geometry.dispose();
+          if (entityMesh.material) {
+            if (Array.isArray(entityMesh.material)) {
+              entityMesh.material.forEach(material => material.dispose());
             } else {
-              fishMesh.material.dispose();
+              entityMesh.material.dispose();
             }
           }
-          this.fishGroup.remove(fishMesh);
+          this.entityGroup.remove(entityMesh);
         });
-        this.activeFishMeshes.clear();
+        this.activeEntityMeshes.clear();
       }
-      // Also clear all trails if there are no fish frames
-      this.fishTrails.forEach(trail => {
+      // Also clear all trails if there are no entity frames
+      this.entityTrails.forEach(trail => {
         if (trail.line) {
           if (trail.line.geometry) trail.line.geometry.dispose();
           if (trail.line.material) trail.line.material.dispose();
           this.trailGroup.remove(trail.line);
         }
       });
-      this.fishTrails.clear();
+      this.entityTrails.clear();
       return;
     }
 
-    let fishDataForCurrentTimestamp = null;
+    let entityDataForCurrentTimestamp = null;
     let low = 0;
-    let high = this.roomData.fishFrames.length - 1;
-    let closestFrameData = this.roomData.fishFrames[0]; 
+    let high = this.roomData.entityFrames.length - 1;
+    let closestFrameData = this.roomData.entityFrames[0]; 
     let minDiff = Number.MAX_VALUE;
     let bestMatchIndex = 0;
 
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
-      const frameTimestamp = this.roomData.fishFrames[mid].timestamp;
+      const frameTimestamp = this.roomData.entityFrames[mid].timestamp;
       const diff = Math.abs(frameTimestamp - timestamp);
 
       if (diff < minDiff) {
         minDiff = diff;
-        closestFrameData = this.roomData.fishFrames[mid];
+        closestFrameData = this.roomData.entityFrames[mid];
         bestMatchIndex = mid;
       }
 
@@ -279,8 +279,8 @@ export class SceneManager {
       }
     }
 
-    for (let i = Math.max(0, bestMatchIndex - 1); i <= Math.min(this.roomData.fishFrames.length - 1, bestMatchIndex + 1); i++) {
-      const frame = this.roomData.fishFrames[i];
+    for (let i = Math.max(0, bestMatchIndex - 1); i <= Math.min(this.roomData.entityFrames.length - 1, bestMatchIndex + 1); i++) {
+      const frame = this.roomData.entityFrames[i];
       const diff = Math.abs(frame.timestamp - timestamp);
       if (diff < minDiff) {
         minDiff = diff;
@@ -288,55 +288,55 @@ export class SceneManager {
       }
     }
     
-    fishDataForCurrentTimestamp = closestFrameData && Array.isArray(closestFrameData.fishStates) ? closestFrameData.fishStates : [];
+    entityDataForCurrentTimestamp = closestFrameData && Array.isArray(closestFrameData.entityStates) ? closestFrameData.entityStates : [];
 
-    const currentFrameFishIds = new Set();
-    // Assuming fishData in fishDataForCurrentTimestamp always has an ID
-    if (fishDataForCurrentTimestamp) {
-      fishDataForCurrentTimestamp.forEach(fishData => {
-        currentFrameFishIds.add(fishData.id);
+    const currentFrameEntityIds = new Set();
+    // Assuming entityData in entityDataForCurrentTimestamp always has an ID
+    if (entityDataForCurrentTimestamp) {
+      entityDataForCurrentTimestamp.forEach(entityData => {
+        currentFrameEntityIds.add(entityData.id);
       });
     }
 
-    // Assuming fishData always has id, position, and forward
-    if (fishDataForCurrentTimestamp) {
-      fishDataForCurrentTimestamp.forEach(fishData => {
-        const fishId = fishData.id; // Get fishId here for easier access
-        let existingFishMesh = this.activeFishMeshes.get(fishId);
+    // Assuming entityData always has id, position, and forward
+    if (entityDataForCurrentTimestamp) {
+      entityDataForCurrentTimestamp.forEach(entityData => {
+        const entityId = entityData.id; // Get entityId here for easier access
+        let existingEntityMesh = this.activeEntityMeshes.get(entityId);
 
-        if (existingFishMesh) {
-          existingFishMesh.position.set(...fishData.position);
+        if (existingEntityMesh) {
+          existingEntityMesh.position.set(...entityData.position);
 
-          if (Array.isArray(fishData.forward) && fishData.forward.length === 3) {
-            const forwardVector = new THREE.Vector3(...fishData.forward).normalize();
+          if (Array.isArray(entityData.forward) && entityData.forward.length === 3) {
+            const forwardVector = new THREE.Vector3(...entityData.forward).normalize();
             const defaultConeTipDirection = new THREE.Vector3(0, 1, 0); 
             if (forwardVector.lengthSq() > 0.0001) {
               if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
-                existingFishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+                existingEntityMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
               } else {
-                existingFishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
+                existingEntityMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
               }
             }
           }
-           const fishType = fishData.type || 'default';
-           const fishColors = this._getFishColors(); 
-           const newColor = fishColors[fishType] || fishColors['default'];
-           if (existingFishMesh.material.color.getHex() !== newColor) {
-             existingFishMesh.material.color.setHex(newColor);
+           const entityType = entityData.type || 'default';
+           const entityColors = this._getEntityColors(); 
+           const newColor = entityColors[entityType] || entityColors['default'];
+           if (existingEntityMesh.material.color.getHex() !== newColor) {
+             existingEntityMesh.material.color.setHex(newColor);
            }
 
-          // Update trail for existing fish
-          const currentPosition = existingFishMesh.position.clone();
-          let trail = this.fishTrails.get(fishId);
+          // Update trail for existing entity
+          const currentPosition = existingEntityMesh.position.clone();
+          let trail = this.entityTrails.get(entityId);
           
-          // This check might be redundant if new fish are always initialized, but good for safety
+          // This check might be redundant if new entity are always initialized, but good for safety
           if (!trail) { 
               trail = { points: [], line: null };
-              this.fishTrails.set(fishId, trail);
+              this.entityTrails.set(entityId, trail);
           }
 
           trail.points.push(currentPosition);
-          while (trail.points.length > this.maxTrailPoints) {
+          while (trail.points.length > this.maxTrailLength) {
               trail.points.shift(); 
           }
 
@@ -345,7 +345,7 @@ export class SceneManager {
                   if (trail.line.geometry) trail.line.geometry.dispose();
                   trail.line.geometry = new THREE.BufferGeometry().setFromPoints(trail.points);
               } else {
-                  const trailMaterial = new THREE.LineBasicMaterial({ color: newColor }); // Use fish's color
+                  const trailMaterial = new THREE.LineBasicMaterial({ color: newColor }); // Use entity's color
                   const trailGeometry = new THREE.BufferGeometry().setFromPoints(trail.points);
                   trail.line = new THREE.Line(trailGeometry, trailMaterial);
                   this.trailGroup.add(trail.line);
@@ -358,13 +358,13 @@ export class SceneManager {
           }
 
         } else {
-          const newFishMesh = this._createFishMesh(fishData);
-          if (newFishMesh) { 
-            this.fishGroup.add(newFishMesh);
-            this.activeFishMeshes.set(fishId, newFishMesh); // Use fishId directly
+          const newEntityMesh = this._createEntityMesh(entityData);
+          if (newEntityMesh) { 
+            this.entityGroup.add(newEntityMesh);
+            this.activeEntityMeshes.set(entityId, newEntityMesh); // Use entityId directly
 
-            // Initialize trail for new fish
-            this.fishTrails.set(fishId, { points: [newFishMesh.position.clone()], line: null });
+            // Initialize trail for new entity
+            this.entityTrails.set(entityId, { points: [newEntityMesh.position.clone()], line: null });
           }
         }
       });
@@ -387,44 +387,44 @@ export class SceneManager {
     this.meshGroup.add(roomLines);
   }
 
-  _getFishColors() {
+  _getEntityColors() {
     return {
       'yellowtang': 0x00ff00,
-      'clownfish': 0xff0000,
+      'clownentity': 0xff0000,
       'sardine': 0x0000ff,
       'default': 0x808080    
     };
   }
 
-  _createFishMesh(fishData) {
-    // Assuming fishData always has id, position, and forward
-    const fishColors = this._getFishColors();
-    const fishType = fishData.type || 'default'; // Type might be optional, default is good
-    const color = fishColors[fishType] || fishColors['default'];
+  _createEntityMesh(entityData) {
+    // Assuming entityData always has id, position, and forward
+    const entityColors = this._getEntityColors();
+    const entityType = entityData.type || 'default'; // Type might be optional, default is good
+    const color = entityColors[entityType] || entityColors['default'];
     const scale = 0.3; 
 
-    const fishGeometry = new THREE.ConeGeometry(0.3 * scale, 0.8 * scale, 8);
-    const fishMaterial = new THREE.MeshPhongMaterial({ color });
-    const fishMesh = new THREE.Mesh(fishGeometry, fishMaterial);
+    const entityGeometry = new THREE.ConeGeometry(0.3 * scale, 0.8 * scale, 8);
+    const entityMaterial = new THREE.MeshPhongMaterial({ color });
+    const entityMesh = new THREE.Mesh(entityGeometry, entityMaterial);
     
-    fishMesh.userData.fishId = fishData.id; 
-    fishMesh.position.set(...fishData.position);
+    entityMesh.userData.entityId = entityData.id; 
+    entityMesh.position.set(...entityData.position);
     
-    if (Array.isArray(fishData.forward) && fishData.forward.length === 3) {
-      const forwardVector = new THREE.Vector3(...fishData.forward).normalize();
+    if (Array.isArray(entityData.forward) && entityData.forward.length === 3) {
+      const forwardVector = new THREE.Vector3(...entityData.forward).normalize();
       const defaultConeTipDirection = new THREE.Vector3(0, 1, 0); 
       
       if (forwardVector.lengthSq() > 0.0001) {
         if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
-          fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+          entityMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
         } else {
-          fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
+          entityMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
         }
       }
     }
     
-    fishMesh.scale.set(scale, scale, scale);
-    return fishMesh;
+    entityMesh.scale.set(scale, scale, scale);
+    return entityMesh;
   }
 
   updateHands(timestamp) {
@@ -477,53 +477,30 @@ export class SceneManager {
     }
   }
 
-  // Method to clear all dynamic scene elements (fish and trails)
+  // Method to clear all dynamic scene elements (entity and trails)
   resetSceneState() {
-    // Clear active fish meshes
-    this.activeFishMeshes.forEach((fishMesh, fishId) => {
-      if (fishMesh.geometry) fishMesh.geometry.dispose();
-      if (fishMesh.material) {
-        if (Array.isArray(fishMesh.material)) {
-          fishMesh.material.forEach(m => m.dispose());
+    // Clear active entity meshes
+    this.activeEntityMeshes.forEach((entityMesh, entityId) => {
+      if (entityMesh.geometry) entityMesh.geometry.dispose();
+      if (entityMesh.material) {
+        if (Array.isArray(entityMesh.material)) {
+          entityMesh.material.forEach(m => m.dispose());
         } else {
-          fishMesh.material.dispose();
+          entityMesh.material.dispose();
         }
       }
-      this.fishGroup.remove(fishMesh);
+      this.entityGroup.remove(entityMesh);
     });
-    this.activeFishMeshes.clear();
+    this.activeEntityMeshes.clear();
 
-    // Clear fish trails
-    this.fishTrails.forEach((trail, fishId) => {
+    // Clear entity trails
+    this.entityTrails.forEach((trail, entityId) => {
       if (trail.line) {
         if (trail.line.geometry) trail.line.geometry.dispose();
         if (trail.line.material) trail.line.material.dispose();
         this.trailGroup.remove(trail.line);
       }
     });
-    this.fishTrails.clear();
-  }
-
-  clearAllTrails() {
-    this.fishTrails.forEach((trail, fishId) => {
-      if (trail.line) {
-        if (trail.line.geometry) trail.line.geometry.dispose();
-        if (trail.line.material) trail.line.material.dispose();
-        this.trailGroup.remove(trail.line);
-      }
-      // Reset points for the next trail segment or remove the entry if fish might disappear
-      // For now, just clearing points and line reference, assuming fish persist.
-      trail.points = [];
-      trail.line = null; 
-      // If we wanted to fully remove and reinitialize trail entries, we could delete from this.fishTrails here
-      // and then rely on updateFish to recreate them. For now, just clearing points is simpler.
-    });
-    // If trails were removed from fishTrails map, you'd do: this.fishTrails.clear(); 
-    // But then updateFish needs to be robust about re-adding them.
-    // The current approach (clearing points and line) is okay if fish always persist.
-  }
-
-  setTrailLength(newLength) {
-    this.maxTrailPoints = newLength;
+    this.entityTrails.clear();
   }
 } 
