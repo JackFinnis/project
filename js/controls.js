@@ -27,6 +27,36 @@ export class ControlsManager {
     this.speedControl = document.getElementById('speedControl');
     this.speedValue = document.getElementById('speedValue');
     this.timeDisplayElement = document.getElementById('timeDisplay'); // Added
+
+    // Trail Length Slider
+    this.trailLengthSlider = document.createElement('input');
+    this.trailLengthSlider.type = 'range';
+    this.trailLengthSlider.id = 'trailLengthSlider';
+    this.trailLengthSlider.min = '0';
+    this.trailLengthSlider.max = '500'; // Max trail length
+    this.trailLengthSlider.value = this.sceneManager.MAX_TRAIL_POINTS || 200; // Default to SceneManager's value or 200
+
+    this.trailLengthValue = document.createElement('span');
+    this.trailLengthValue.id = 'trailLengthValue';
+    this.trailLengthValue.textContent = `${String(this.trailLengthSlider.value).padStart(3, '0')} points`;
+
+    const trailLengthLabel = document.createElement('label');
+    trailLengthLabel.htmlFor = 'trailLengthSlider';
+    trailLengthLabel.textContent = 'Trail Length: ';
+
+    const trailControlDiv = document.createElement('div');
+    trailControlDiv.appendChild(trailLengthLabel);
+    trailControlDiv.appendChild(this.trailLengthSlider);
+    trailControlDiv.appendChild(this.trailLengthValue);
+
+    const controlsContainer = document.getElementById('controls');
+    // Insert trail controls before the timeline for better layout
+    const timelineLabel = document.querySelector('label[for="timeline"]');
+    if (controlsContainer && timelineLabel) {
+        controlsContainer.insertBefore(trailControlDiv, timelineLabel);
+    } else if (controlsContainer) {
+        controlsContainer.appendChild(trailControlDiv); // Fallback if timeline label not found
+    }
   }
 
   setupEventListeners() {
@@ -35,6 +65,7 @@ export class ControlsManager {
     this.resetBtn.addEventListener('click', () => this.resetPlayback());
     this.timeline.addEventListener('input', (e) => this.onTimelineChange(e));
     this.speedControl.addEventListener('input', (e) => this.onSpeedChange(e));
+    this.trailLengthSlider.addEventListener('input', (e) => this.onTrailLengthChange(e));
     window.addEventListener('keydown', (e) => this.handleKeydown(e)); // Added for spacebar
   }
 
@@ -54,6 +85,7 @@ export class ControlsManager {
   togglePlayPause() {
     // Case: At the end of playback and currently paused, user wants to play again
     if (!this.isPlaying && this.frames.length > 0 && this.frameIndex === this.frames.length - 1) {
+      this.sceneManager.resetSceneState();
       this.frameIndex = 0;
       this.elapsedMovieTime = 0; // Reset elapsed time to the beginning
       this.currentFrameTimestamp = this.firstFrameTimestamp; // Reset current timestamp to the first frame's
@@ -106,6 +138,12 @@ export class ControlsManager {
     // No frameInterval to update anymore
   }
 
+  onTrailLengthChange(event) {
+    const newLength = parseInt(event.target.value, 10);
+    this.sceneManager.setTrailLength(newLength);
+    this.trailLengthValue.textContent = `${String(newLength).padStart(3, '0')} points`;
+  }
+
   formatTime(seconds) {
     if (isNaN(seconds) || seconds < 0) return "0.0s";
     return seconds.toFixed(1) + "s";
@@ -125,6 +163,8 @@ export class ControlsManager {
 
   resetPlayback() {
     if (this.frames.length === 0) return;
+
+    this.sceneManager.resetSceneState(); // Call new reset method in SceneManager
 
     this.frameIndex = 0;
     // currentFrameTimestamp will be the timestamp of the first frame, or 0 if no frames (handled by firstFrameTimestamp)

@@ -59,4 +59,22 @@ label {
 #timeDisplay {
   margin-left: 5px;
   white-space: nowrap;
+}
+
+/* Styles for the new Trail Length Slider */
+#trailLengthSlider {
+  width: 120px; /* Similar to speedControl */
+  margin: 0;
+}
+
+/* Ensure the trail control div aligns like other flex items */
+#controls > div {
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Small gap between label, slider, and value text */
+}
+
+#trailLengthValue {
+    min-width: 70px; /* Give it some space so text doesn't jump around */
+    white-space: nowrap;
 } 

@@ -59,14 +59,14 @@ export class SceneManager {
 
     const handGeometry = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
 
-    // Left Hand (blue)
-    const leftHandMaterial = new THREE.MeshPhongMaterial({ color: 0x0000ff });
+    // Left Hand (yellow)
+    const leftHandMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
     this.handVisuals.left = new THREE.Mesh(handGeometry, leftHandMaterial);
     this.handVisuals.left.visible = false; 
     this.handsGroup.add(this.handVisuals.left);
 
-    // Right Hand (red)
-    const rightHandMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+    // Right Hand (yellow)
+    const rightHandMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
     this.handVisuals.right = new THREE.Mesh(handGeometry, rightHandMaterial); 
     this.handVisuals.right.visible = false; 
     this.handsGroup.add(this.handVisuals.right);
@@ -291,7 +291,7 @@ export class SceneManager {
       }
     }
     
-    fishDataForCurrentTimestamp = closestFrameData.fishStates || [];
+    fishDataForCurrentTimestamp = closestFrameData && Array.isArray(closestFrameData.fishStates) ? closestFrameData.fishStates : [];
 
     const currentFrameFishIds = new Set();
     // Assuming fishData in fishDataForCurrentTimestamp always has an ID
@@ -300,32 +300,6 @@ export class SceneManager {
         currentFrameFishIds.add(fishData.id);
       });
     }
-
-    this.activeFishMeshes.forEach((fishMesh, fishId) => {
-      if (!currentFrameFishIds.has(fishId)) {
-        if (fishMesh.geometry) fishMesh.geometry.dispose();
-        if (fishMesh.material) {
-          if (Array.isArray(fishMesh.material)) {
-            fishMesh.material.forEach(m => m.dispose());
-          } else {
-            fishMesh.material.dispose();
-          }
-        }
-        this.fishGroup.remove(fishMesh);
-        this.activeFishMeshes.delete(fishId);
-
-        // Remove trail for disappeared fish
-        if (this.fishTrails.has(fishId)) {
-          const trail = this.fishTrails.get(fishId);
-          if (trail.line) {
-            if (trail.line.geometry) trail.line.geometry.dispose();
-            if (trail.line.material) trail.line.material.dispose();
-            this.trailGroup.remove(trail.line);
-          }
-          this.fishTrails.delete(fishId);
-        }
-      }
-    });
 
     // Assuming fishData always has id, position, and forward
     if (fishDataForCurrentTimestamp) {
@@ -504,5 +478,36 @@ export class SceneManager {
     } else {
       this.handVisuals.right.visible = false;
     }
+  }
+
+  // Method to clear all dynamic scene elements (fish and trails)
+  resetSceneState() {
+    // Clear active fish meshes
+    this.activeFishMeshes.forEach((fishMesh, fishId) => {
+      if (fishMesh.geometry) fishMesh.geometry.dispose();
+      if (fishMesh.material) {
+        if (Array.isArray(fishMesh.material)) {
+          fishMesh.material.forEach(m => m.dispose());
+        } else {
+          fishMesh.material.dispose();
+        }
+      }
+      this.fishGroup.remove(fishMesh);
+    });
+    this.activeFishMeshes.clear();
+
+    // Clear fish trails
+    this.fishTrails.forEach((trail, fishId) => {
+      if (trail.line) {
+        if (trail.line.geometry) trail.line.geometry.dispose();
+        if (trail.line.material) trail.line.material.dispose();
+        this.trailGroup.remove(trail.line);
+      }
+    });
+    this.fishTrails.clear();
+  }
+
+  setTrailLength(newLength) {
+    this.MAX_TRAIL_POINTS = newLength;
   }
 } 
