@@ -1,80 +1,56 @@
-body { 
-  margin: 0; 
+* {
+  box-sizing: border-box;
+  margin: 0;
   padding: 0;
-  /* overflow: hidden; */ /* Removed to allow #controls scrollbar to function */
-  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+body { 
+  font-family: system-ui;
   color: white;
   background-color: black;
 }
 
-canvas { 
-  display: block; 
+button {
+  background-color: white;
+  border: none;
+  color: black;
+  text-align: center;
+  text-decoration: none;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  min-width: 100px;
+  height: 2rem;
+}
+
+input[type="range"] {
+  appearance: none;
+  height: 3px;
+  border-radius: 3px;
+  background: #999;
 }
 
 #controls {
   position: absolute;
   bottom: 0;
-  left: 0;
   width: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
   padding: 5px 10px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   flex-wrap: nowrap;
   gap: 10px;
-  overflow-x: auto;
-  box-sizing: border-box;
 }
 
-#timeline {
-  flex-grow: 1;
-  min-width: 150px;
-}
-
-#speedControl {
+#speedSlider {
   width: 120px;
-  margin: 0;
 }
 
-button {
-  background-color: #4CAF50;
-  border: none;
-  color: white;
-  padding: 8px 16px;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 14px;
-  margin: 0 5px;
-  cursor: pointer;
-  border-radius: 4px;
-  min-width: 75px;
-}
-
-label {
-  margin-right: 5px;
-}
-
-#timeDisplay {
-  margin-left: 5px;
-  white-space: nowrap;
-}
-
-/* Styles for the new Trail Length Slider */
 #trailLengthSlider {
-  width: 120px; /* Similar to speedControl */
-  margin: 0;
+  width: 120px;
 }
 
-/* Ensure the trail control div aligns like other flex items */
-#controls > div {
-    display: flex;
-    align-items: center;
-    gap: 5px; /* Small gap between label, slider, and value text */
+#timelineSlider {
+  width: 100%;
 }
-
-#trailLengthValue {
-    min-width: 70px; /* Give it some space so text doesn't jump around */
-    white-space: nowrap;
-} 

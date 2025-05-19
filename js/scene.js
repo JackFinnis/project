@@ -13,7 +13,7 @@ export class SceneManager {
     this.activeFishMeshes = new Map(); // Added to track active fish by ID
     this.trailGroup = new THREE.Group(); // Group for fish trails
     this.fishTrails = new Map(); // Map to store trail data { fishId: { line: THREE.Line, points: THREE.Vector3[] } }
-    this.MAX_TRAIL_POINTS = 200; // Max points per trail
+    this.maxTrailPoints = 200; // Max points per trail
     this.roomData = null;
     this.currentFrameIndex = 0;
     this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered meshes
@@ -24,9 +24,6 @@ export class SceneManager {
   }
 
   setupScene() {
-    // Scene setup
-    this.scene.background = new THREE.Color(0x111111);
-    
     // Camera setup
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(2, 2, 2);
@@ -339,7 +336,7 @@ export class SceneManager {
           }
 
           trail.points.push(currentPosition);
-          while (trail.points.length > this.MAX_TRAIL_POINTS) {
+          while (trail.points.length > this.maxTrailPoints) {
               trail.points.shift(); 
           }
 
@@ -385,7 +382,7 @@ export class SceneManager {
     geometry.computeVertexNormals();
 
     const edges = new THREE.EdgesGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x999999 });
     const roomLines = new THREE.LineSegments(edges, lineMaterial);
     this.meshGroup.add(roomLines);
   }
@@ -507,7 +504,26 @@ export class SceneManager {
     this.fishTrails.clear();
   }
 
+  clearAllTrails() {
+    this.fishTrails.forEach((trail, fishId) => {
+      if (trail.line) {
+        if (trail.line.geometry) trail.line.geometry.dispose();
+        if (trail.line.material) trail.line.material.dispose();
+        this.trailGroup.remove(trail.line);
+      }
+      // Reset points for the next trail segment or remove the entry if fish might disappear
+      // For now, just clearing points and line reference, assuming fish persist.
+      trail.points = [];
+      trail.line = null; 
+      // If we wanted to fully remove and reinitialize trail entries, we could delete from this.fishTrails here
+      // and then rely on updateFish to recreate them. For now, just clearing points is simpler.
+    });
+    // If trails were removed from fishTrails map, you'd do: this.fishTrails.clear(); 
+    // But then updateFish needs to be robust about re-adding them.
+    // The current approach (clearing points and line) is okay if fish always persist.
+  }
+
   setTrailLength(newLength) {
-    this.MAX_TRAIL_POINTS = newLength;
+    this.maxTrailPoints = newLength;
   }
 } 
