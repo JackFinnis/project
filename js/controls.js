@@ -115,7 +115,9 @@ export class ControlsManager {
   ontimelineSliderChange(event) {
     const newFrameIndex = parseInt(event.target.value);
     if (newFrameIndex >= 0 && newFrameIndex < this.frames.length) {
-        this.sceneManager.resetSceneState(); // Reset full scene state on scrub
+        // Removing resetSceneState() to allow incremental updates during scrubbing,
+        // potentially making scrubbing smoother.
+        // this.sceneManager.resetSceneState(); 
         this.frameIndex = newFrameIndex;
         this.currentFrameTimestamp = this.frames[this.frameIndex].timestamp;
         this.elapsedMovieTime = this.currentFrameTimestamp - this.firstFrameTimestamp;
@@ -217,19 +219,24 @@ export class ControlsManager {
     }
     this.timelineSlider.disabled = !hasFrames;
     this.speedSlider.disabled = !hasFrames;
-    if (this.timelineValueElement) {
-        this.timelineValueElement.textContent = `${this.formatTime(0)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+    
+    // Reset playback speed and related UI
+    this.playbackSpeed = 1.0;
+    if (this.speedSlider) {
+        this.speedSlider.value = this.playbackSpeed;
+    }
+    if (this.speedValue) {
+        this.speedValue.textContent = this.playbackSpeed.toFixed(1) + 'x';
+    }
+    
+    this.isPlaying = hasFrames; // Always attempt to play if frames exist
+    this.lastRealWorldTime = 0; // Will be set by play() if playing
+
+    if (this.isPlaying) {
+        this.play(); // Initialize lastRealWorldTime if playing
     }
 
-    if (!hasFrames) {
-      this.isPlaying = false;
-    } else {
-      // If we just got frames, and were set to play, ensure lastRealWorldTime is set
-      if (this.isPlaying) {
-          this.lastRealWorldTime = performance.now(); 
-      }
-    }
-    this.updateUI();
+    this.updateUI(); // updateUI will set playPauseButton text and timeline value
   }
 
   update(currentRealWorldTime) {

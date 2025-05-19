@@ -8,6 +8,7 @@ export class SceneManager {
     this.renderer = null; // WebGL renderer
     this.controls = null; // OrbitControls for camera manipulation
     this.meshGroup = null; // THREE.Group for room geometry meshes
+    this.activeRoomMeshes = new Map(); // Tracks active room mesh objects by ID
     this.entityGroup = null; // THREE.Group for dynamic entities
     this.handsGroup = new THREE.Group(); // THREE.Group for hand visualization spheres
     this.activeEntityMeshes = new Map(); // Tracks active entity meshes by ID: { entityId: THREE.Mesh }
@@ -147,59 +148,89 @@ export class SceneManager {
   }
 
   updateMesh(timestamp) {
-    // renderedMeshStates is initialized in the constructor
     const latestMeshesById = new Map();
 
-    if (this.roomData.meshUpdates.length === 0) {
-        if (this.renderedMeshStates.size > 0) {
-            this.clearMeshGroup();
-            this.renderedMeshStates = new Map(); 
-        }
-        return;
-    }
-
-    // Populate latestMeshesById from roomData.meshUpdates
-    for (const meshUpdate of this.roomData.meshUpdates) {
+    // 1. Determine the latest version of each mesh that should be visible at the current timestamp
+    if (this.roomData && this.roomData.meshUpdates) {
+      for (const meshUpdate of this.roomData.meshUpdates) {
         if (meshUpdate.timestamp <= timestamp) {
-            if (!latestMeshesById.has(meshUpdate.id) ||
-                meshUpdate.timestamp >= latestMeshesById.get(meshUpdate.id).timestamp) {
-                latestMeshesById.set(meshUpdate.id, meshUpdate);
-            }
+          if (!latestMeshesById.has(meshUpdate.id) ||
+              meshUpdate.timestamp >= latestMeshesById.get(meshUpdate.id).timestamp) {
+            latestMeshesById.set(meshUpdate.id, meshUpdate);
+          }
         }
+      }
     }
 
-    let hasChanged = false;
-    if (this.renderedMeshStates.size !== latestMeshesById.size) {
-        hasChanged = true;
-    } else {
-        for (const [id, meshData] of latestMeshesById) {
-            if (!this.renderedMeshStates.has(id) ||
-                this.renderedMeshStates.get(id) !== meshData.timestamp) {
-                hasChanged = true;
-                break;
-            }
+    const currentMeshIds = new Set();
+
+    // 2. Update existing meshes or add new ones
+    latestMeshesById.forEach((meshData, meshId) => {
+      currentMeshIds.add(meshId);
+      const existingMeshObject = this.activeRoomMeshes.get(meshId);
+
+      if (existingMeshObject) {
+        // Mesh exists, check if its content needs updating
+        if (existingMeshObject.userData.meshTimestamp !== meshData.timestamp) {
+          // Timestamp changed, so geometry needs an update
+          // Dispose old geometries
+          if (existingMeshObject.geometry) existingMeshObject.geometry.dispose();
+          if (existingMeshObject.material) existingMeshObject.material.dispose(); // Assuming EdgesGeometry uses a single material
+          
+          // Create new geometry and update the mesh
+          const newBaseGeometry = new THREE.BufferGeometry();
+          const vertices = new Float32Array(meshData.vertices.flat());
+          const indices = new Uint32Array(meshData.faces.flat());
+          newBaseGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+          newBaseGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
+          newBaseGeometry.computeVertexNormals();
+          
+          const newEdgesGeometry = new THREE.EdgesGeometry(newBaseGeometry);
+          // It's crucial to also dispose the newBaseGeometry as EdgesGeometry creates its own internal geometry
+          newBaseGeometry.dispose();
+
+          existingMeshObject.geometry = newEdgesGeometry;
+          existingMeshObject.userData.meshTimestamp = meshData.timestamp;
+          // Material can be reused if it's always the same, otherwise update here too
         }
-    }
-    
-    if (latestMeshesById.size === 0 && this.renderedMeshStates.size > 0) {
-        hasChanged = true; 
-    }
+      } else {
+        // Mesh is new, create it and add it to the scene
+        const newMeshObject = this.createRoom(meshData); // createRoom now returns the mesh object
+        this.meshGroup.add(newMeshObject);
+        this.activeRoomMeshes.set(meshId, newMeshObject);
+      }
+    });
 
-    if (!hasChanged) {
-        return; 
-    }
+    // 3. Remove meshes that are no longer in latestMeshesById
+    const idsToRemove = [];
+    this.activeRoomMeshes.forEach((meshObject, meshId) => {
+      if (!currentMeshIds.has(meshId)) {
+        idsToRemove.push(meshId);
+      }
+    });
 
-    this.clearMeshGroup(); 
-    const newRenderedStates = new Map();
+    idsToRemove.forEach(meshId => {
+      const meshObject = this.activeRoomMeshes.get(meshId);
+      if (meshObject) {
+        if (meshObject.geometry) meshObject.geometry.dispose();
+        if (meshObject.material) {
+          if (Array.isArray(meshObject.material)) {
+            meshObject.material.forEach(material => material.dispose());
+          } else {
+            meshObject.material.dispose();
+          }
+        }
+        this.meshGroup.remove(meshObject);
+        this.activeRoomMeshes.delete(meshId);
+      }
+    });
 
-    if (latestMeshesById.size > 0) {
-        latestMeshesById.forEach(meshData => {
-            this.createRoom(meshData); 
-            newRenderedStates.set(meshData.id, meshData.timestamp);
-        });
-    }
-    
-    this.renderedMeshStates = newRenderedStates;
+    // 4. Update renderedMeshStates for compatibility or other uses if needed
+    // This step can be simplified or removed if renderedMeshStates is no longer the primary driver for updates.
+    this.renderedMeshStates.clear();
+    this.activeRoomMeshes.forEach((meshObject, meshId) => {
+      this.renderedMeshStates.set(meshId, meshObject.userData.meshTimestamp);
+    });
   }
 
   clearMeshGroup() {
@@ -319,28 +350,37 @@ export class SceneManager {
           const currentPosition = existingEntityMesh.position.clone();
           let trail = this.entityTrails.get(entityId);
           
-          // This check might be redundant if new entity are always initialized, but good for safety
           if (!trail) { 
               trail = { points: [], line: null };
               this.entityTrails.set(entityId, trail);
           }
 
           trail.points.push(currentPosition);
-          while (trail.points.length > this.maxTrailLength) {
-              trail.points.shift(); 
+          // Ensure maxTrailLength is respected, even if it's 0
+          if (this.maxTrailLength === 0) {
+            trail.points = [];
+          } else {
+            while (trail.points.length > this.maxTrailLength) {
+                trail.points.shift(); 
+            }
           }
 
           if (trail.points.length >= 2) {
               if (trail.line) {
+                  // Dispose old geometry before creating a new one
                   if (trail.line.geometry) trail.line.geometry.dispose();
                   trail.line.geometry = new THREE.BufferGeometry().setFromPoints(trail.points);
+                  // Update color if it changed
+                  if (trail.line.material.color.getHex() !== newColor) {
+                    trail.line.material.color.setHex(newColor);
+                  }
               } else {
-                  const trailMaterial = new THREE.LineBasicMaterial({ color: newColor }); // Use entity's color
+                  const trailMaterial = new THREE.LineBasicMaterial({ color: newColor });
                   const trailGeometry = new THREE.BufferGeometry().setFromPoints(trail.points);
                   trail.line = new THREE.Line(trailGeometry, trailMaterial);
                   this.trailGroup.add(trail.line);
               }
-          } else if (trail.line) { // Not enough points, remove line if it exists
+          } else if (trail.line) { // Not enough points (or maxTrailLength is 0), remove line if it exists
               if (trail.line.geometry) trail.line.geometry.dispose();
               if (trail.line.material) trail.line.material.dispose();
               this.trailGroup.remove(trail.line);
@@ -373,7 +413,13 @@ export class SceneManager {
     const edges = new THREE.EdgesGeometry(geometry);
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0x999999 });
     const roomLines = new THREE.LineSegments(edges, lineMaterial);
-    this.meshGroup.add(roomLines);
+
+    // Store id and timestamp for tracking updates
+    roomLines.userData.meshId = meshData.id;
+    roomLines.userData.meshTimestamp = meshData.timestamp;
+    
+    // The mesh will be added to this.meshGroup by the calling function (updateMesh)
+    return roomLines;
   }
 
   getEntityColors() {
@@ -485,5 +531,10 @@ export class SceneManager {
     });
     this.entityTrails.clear();
     this.trailGroup.clear(); // Clear children from the group
+
+    // Clear room meshes
+    this.clearMeshGroup(); // Disposes geometries/materials and clears children
+    this.activeRoomMeshes.clear();
+    this.renderedMeshStates.clear(); // Also clear this tracking map
   }
 } 

@@ -7,6 +7,7 @@
 
 body { 
   font-family: system-ui;
+  font-variant-numeric: tabular-nums;
   color: white;
   background-color: black;
 }

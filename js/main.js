@@ -28,8 +28,10 @@ class ARPlayback {
   }
 
   async loadNewDataset(filename) {
+    // Explicitly stop playback and update UI before any async operations or scene resets.
+    // This helps prevent the animation loop from advancing based on old data while new data loads.
     this.controlsManager.isPlaying = false;
-    this.controlsManager.updateUI();
+    this.controlsManager.updateUI(); // Reflect immediate stop in UI (e.g., Play button shows)
 
     this.sceneManager.resetSceneState();
 
@@ -37,19 +39,15 @@ class ARPlayback {
       const sceneData = await this.sceneManager.loadRoomData(filename);
 
       this.controlsManager.setFrames(sceneData.frames);
+      
       this.sceneManager.updateFrame(0);
-
-      this.controlsManager.isPlaying = false;
-      this.controlsManager.playbackSpeed = 1.0;
-      this.controlsManager.speedSlider.value = this.controlsManager.playbackSpeed;
-      this.controlsManager.speedValue.textContent = this.controlsManager.playbackSpeed.toFixed(1) + 'x';
-      this.controlsManager.updateUI();
-
       this.sceneManager.render();
 
     } catch (error) {
       console.error(`Failed to load new dataset ${filename}:`, error);
       this.controlsManager.setFrames([]);
+      this.sceneManager.updateFrame(0);
+      this.sceneManager.render();
     }
   }
 
