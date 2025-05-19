@@ -15,7 +15,7 @@ export class ControlsManager {
 
     this.frames = []; // Array of frame objects, typically { index: number, timestamp: number }
     this.totalMovieDurationSeconds = 0; // Total duration of the movie/playback in seconds
-    this.timelineValueElement = null; // DOM element to display the current playback time and total duration
+    this.timelineValue = null; // DOM element to display the current playback time and total duration
     
     // UI Element References - these are assigned in setupControls
     this.playPauseButton = null; // DOM element for the play/pause button
@@ -37,7 +37,7 @@ export class ControlsManager {
     this.timelineSlider = document.getElementById('timelineSlider');
     this.speedSlider = document.getElementById('speedSlider');
     this.speedValue = document.getElementById('speedValue');
-    this.timelineValueElement = document.getElementById('timelineValue');
+    this.timelineValue = document.getElementById('timelineValue');
 
     // Trail Length Slider - Get from HTML
     this.trailLengthSlider = document.getElementById('trailLengthSlider');
@@ -154,11 +154,11 @@ export class ControlsManager {
     this.timelineSlider.value = this.frameIndex;
     this.playPauseButton.textContent = this.isPlaying ? 'Pause' : 'Play';
 
-    if (this.timelineValueElement && this.frames.length > 0) {
+    if (this.timelineValue && this.frames.length > 0) {
       const currentTimeSeconds = this.elapsedMovieTime;
-      this.timelineValueElement.textContent = `${this.formatTime(currentTimeSeconds)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
-    } else if (this.timelineValueElement) {
-      this.timelineValueElement.textContent = `${this.formatTime(0)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+      this.timelineValue.textContent = `${this.formatTime(currentTimeSeconds)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
+    } else if (this.timelineValue) {
+      this.timelineValue.textContent = `${this.formatTime(0)} / ${this.formatTime(this.totalMovieDurationSeconds)}`;
     }
   }
 
@@ -183,6 +183,25 @@ export class ControlsManager {
 
     if (!this.isPlaying) { 
          this.sceneManager.render(); 
+    }
+  }
+
+  _updateControlsAvailability(hasFrames) {
+    this.playPauseButton.disabled = !hasFrames;
+    if (this.resetButton) {
+      this.resetButton.disabled = !hasFrames;
+    }
+    this.timelineSlider.disabled = !hasFrames;
+    this.speedSlider.disabled = !hasFrames;
+  }
+
+  _resetPlaybackSpeed() {
+    this.playbackSpeed = 1.0;
+    if (this.speedSlider) {
+        this.speedSlider.value = this.playbackSpeed;
+    }
+    if (this.speedValue) {
+        this.speedValue.textContent = this.playbackSpeed.toFixed(1) + 'x';
     }
   }
 
@@ -213,21 +232,8 @@ export class ControlsManager {
     this.timelineSlider.max = hasFrames ? this.frames.length - 1 : 0;
     this.timelineSlider.value = 0;
     
-    this.playPauseButton.disabled = !hasFrames;
-    if (this.resetButton) {
-      this.resetButton.disabled = !hasFrames;
-    }
-    this.timelineSlider.disabled = !hasFrames;
-    this.speedSlider.disabled = !hasFrames;
-    
-    // Reset playback speed and related UI
-    this.playbackSpeed = 1.0;
-    if (this.speedSlider) {
-        this.speedSlider.value = this.playbackSpeed;
-    }
-    if (this.speedValue) {
-        this.speedValue.textContent = this.playbackSpeed.toFixed(1) + 'x';
-    }
+    this._updateControlsAvailability(hasFrames);
+    this._resetPlaybackSpeed();
     
     this.isPlaying = hasFrames; // Always attempt to play if frames exist
     this.lastRealWorldTime = 0; // Will be set by play() if playing

@@ -13,15 +13,17 @@ class ARPlayback {
     this.init();
   }
 
+  _setupSceneData(sceneData) {
+    this.controlsManager.setFrames(sceneData.frames);
+    this.sceneManager.updateFrame(0);
+    this.sceneManager.render();
+  }
+
   async init() {
     try {
       const sceneData = await this.sceneManager.loadRoomData(this.defaultFileName);
-      
-      this.controlsManager.setFrames(sceneData.frames);
-      this.sceneManager.updateFrame(0);
-      this.sceneManager.render();
+      this._setupSceneData(sceneData);
       this.startRenderLoop();
-      
     } catch (error) {
       console.error('Failed to initialize ARPlayback:', error);
     }
@@ -37,17 +39,11 @@ class ARPlayback {
 
     try {
       const sceneData = await this.sceneManager.loadRoomData(filename);
-
-      this.controlsManager.setFrames(sceneData.frames);
-      
-      this.sceneManager.updateFrame(0);
-      this.sceneManager.render();
-
+      this._setupSceneData(sceneData);
     } catch (error) {
       console.error(`Failed to load new dataset ${filename}:`, error);
-      this.controlsManager.setFrames([]);
-      this.sceneManager.updateFrame(0);
-      this.sceneManager.render();
+      // In case of error, set up with empty/default data
+      this._setupSceneData({ frames: [] }); 
     }
   }
 

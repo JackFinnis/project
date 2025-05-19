@@ -275,43 +275,9 @@ export class SceneManager {
       return;
     }
 
-    let entityDataForCurrentTimestamp = null;
-    let low = 0;
-    let high = this.roomData.entityFrames.length - 1;
-    let closestFrameData = this.roomData.entityFrames[0]; 
-    let minDiff = Number.MAX_VALUE;
-    let bestMatchIndex = 0;
-
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const frameTimestamp = this.roomData.entityFrames[mid].timestamp;
-      const diff = Math.abs(frameTimestamp - timestamp);
-
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestFrameData = this.roomData.entityFrames[mid];
-        bestMatchIndex = mid;
-      }
-
-      if (frameTimestamp < timestamp) {
-        low = mid + 1;
-      } else if (frameTimestamp > timestamp) {
-        high = mid - 1;
-      } else {
-        break; 
-      }
-    }
-
-    for (let i = Math.max(0, bestMatchIndex - 1); i <= Math.min(this.roomData.entityFrames.length - 1, bestMatchIndex + 1); i++) {
-      const frame = this.roomData.entityFrames[i];
-      const diff = Math.abs(frame.timestamp - timestamp);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestFrameData = frame;
-      }
-    }
-    
-    entityDataForCurrentTimestamp = closestFrameData && Array.isArray(closestFrameData.entityStates) ? closestFrameData.entityStates : [];
+    // Simplified logic assuming entityFrames[frameIndex] is the correct data
+    const entityFrameData = this.roomData.entityFrames[frameIndex];
+    const entityDataForCurrentTimestamp = entityFrameData && Array.isArray(entityFrameData.entityStates) ? entityFrameData.entityStates : [];
 
     const currentFrameEntityIds = new Set();
     if (entityDataForCurrentTimestamp) {
