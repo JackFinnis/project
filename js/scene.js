@@ -11,6 +11,9 @@ export class SceneManager {
     this.fishGroup = null;
     this.handsGroup = new THREE.Group();
     this.activeFishMeshes = new Map(); // Added to track active fish by ID
+    this.trailGroup = new THREE.Group(); // Group for fish trails
+    this.fishTrails = new Map(); // Map to store trail data { fishId: { line: THREE.Line, points: THREE.Vector3[] } }
+    this.MAX_TRAIL_POINTS = 200; // Max points per trail
     this.roomData = null;
     this.currentFrameIndex = 0;
     this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered meshes
@@ -45,6 +48,7 @@ export class SceneManager {
     this.scene.add(this.meshGroup);
     this.scene.add(this.fishGroup);
     this.scene.add(this.handsGroup);
+    this.scene.add(this.trailGroup); // Add trailGroup to the scene
     
     this.setupLighting();
   }
@@ -239,6 +243,15 @@ export class SceneManager {
         });
         this.activeFishMeshes.clear();
       }
+      // Also clear all trails if there are no fish frames
+      this.fishTrails.forEach(trail => {
+        if (trail.line) {
+          if (trail.line.geometry) trail.line.geometry.dispose();
+          if (trail.line.material) trail.line.material.dispose();
+          this.trailGroup.remove(trail.line);
+        }
+      });
+      this.fishTrails.clear();
       return;
     }
 
@@ -300,38 +313,87 @@ export class SceneManager {
         }
         this.fishGroup.remove(fishMesh);
         this.activeFishMeshes.delete(fishId);
+
+        // Remove trail for disappeared fish
+        if (this.fishTrails.has(fishId)) {
+          const trail = this.fishTrails.get(fishId);
+          if (trail.line) {
+            if (trail.line.geometry) trail.line.geometry.dispose();
+            if (trail.line.material) trail.line.material.dispose();
+            this.trailGroup.remove(trail.line);
+          }
+          this.fishTrails.delete(fishId);
+        }
       }
     });
 
     // Assuming fishData always has id, position, and forward
     if (fishDataForCurrentTimestamp) {
       fishDataForCurrentTimestamp.forEach(fishData => {
-        if (this.activeFishMeshes.has(fishData.id)) {
-          const fishMesh = this.activeFishMeshes.get(fishData.id);
-          fishMesh.position.set(...fishData.position);
+        const fishId = fishData.id; // Get fishId here for easier access
+        let existingFishMesh = this.activeFishMeshes.get(fishId);
+
+        if (existingFishMesh) {
+          existingFishMesh.position.set(...fishData.position);
 
           if (Array.isArray(fishData.forward) && fishData.forward.length === 3) {
             const forwardVector = new THREE.Vector3(...fishData.forward).normalize();
             const defaultConeTipDirection = new THREE.Vector3(0, 1, 0); 
             if (forwardVector.lengthSq() > 0.0001) {
               if (defaultConeTipDirection.dot(forwardVector) < -0.9999) {
-                fishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+                existingFishMesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
               } else {
-                fishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
+                existingFishMesh.quaternion.setFromUnitVectors(defaultConeTipDirection, forwardVector);
               }
             }
           }
            const fishType = fishData.type || 'default';
            const fishColors = this._getFishColors(); 
            const newColor = fishColors[fishType] || fishColors['default'];
-           if (fishMesh.material.color.getHex() !== newColor) {
-             fishMesh.material.color.setHex(newColor);
+           if (existingFishMesh.material.color.getHex() !== newColor) {
+             existingFishMesh.material.color.setHex(newColor);
            }
+
+          // Update trail for existing fish
+          const currentPosition = existingFishMesh.position.clone();
+          let trail = this.fishTrails.get(fishId);
+          
+          // This check might be redundant if new fish are always initialized, but good for safety
+          if (!trail) { 
+              trail = { points: [], line: null };
+              this.fishTrails.set(fishId, trail);
+          }
+
+          trail.points.push(currentPosition);
+          while (trail.points.length > this.MAX_TRAIL_POINTS) {
+              trail.points.shift(); 
+          }
+
+          if (trail.points.length >= 2) {
+              if (trail.line) {
+                  if (trail.line.geometry) trail.line.geometry.dispose();
+                  trail.line.geometry = new THREE.BufferGeometry().setFromPoints(trail.points);
+              } else {
+                  const trailMaterial = new THREE.LineBasicMaterial({ color: newColor }); // Use fish's color
+                  const trailGeometry = new THREE.BufferGeometry().setFromPoints(trail.points);
+                  trail.line = new THREE.Line(trailGeometry, trailMaterial);
+                  this.trailGroup.add(trail.line);
+              }
+          } else if (trail.line) { // Not enough points, remove line if it exists
+              if (trail.line.geometry) trail.line.geometry.dispose();
+              if (trail.line.material) trail.line.material.dispose();
+              this.trailGroup.remove(trail.line);
+              trail.line = null;
+          }
+
         } else {
-          const fishMesh = this._createFishMesh(fishData);
-          if (fishMesh) { // _createFishMesh could return null if data was truly bad, but we assume it won't.
-            this.fishGroup.add(fishMesh);
-            this.activeFishMeshes.set(fishData.id, fishMesh);
+          const newFishMesh = this._createFishMesh(fishData);
+          if (newFishMesh) { 
+            this.fishGroup.add(newFishMesh);
+            this.activeFishMeshes.set(fishId, newFishMesh); // Use fishId directly
+
+            // Initialize trail for new fish
+            this.fishTrails.set(fishId, { points: [newFishMesh.position.clone()], line: null });
           }
         }
       });
