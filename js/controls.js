@@ -1,7 +1,8 @@
 export class ControlsManager {
-  constructor(sceneManager, onFrameUpdate) {
+  constructor(sceneManager, onFrameUpdate, onFileSelectedCallback) {
     this.sceneManager = sceneManager; // Instance of SceneManager to interact with the 3D scene
     this.onFrameUpdate = onFrameUpdate; // Callback function to notify when the current frame needs to be updated
+    this.onFileSelected = onFileSelectedCallback; // Callback to notify when a new file is selected for loading
     this.isPlaying = true; // Boolean state indicating if playback is currently active
     this.frameIndex = 0; // Current frame index in the playback sequence
     this.playbackSpeed = 1.0; // Multiplier for playback speed (1.0 is normal speed)
@@ -24,6 +25,7 @@ export class ControlsManager {
     this.speedValue = null; // DOM element to display the current playback speed value
     this.trailLengthSlider = null; // DOM element for the trail length range slider
     this.trailLengthValue = null; // DOM element to display the current trail length value
+    this.filePicker = null; // DOM element for the dataset file picker select
 
     this.setupControls();
     this.setupEventListeners();
@@ -41,10 +43,13 @@ export class ControlsManager {
     this.trailLengthSlider = document.getElementById('trailLengthSlider');
     this.trailLengthValue = document.getElementById('trailLengthValue');
 
-    const initialTrailLength = this.sceneManager.maxTrailLength !== undefined ? this.sceneManager.maxTrailLength : parseInt(this.trailLengthSlider.value, 10);
-    this.trailLengthSlider.value = initialTrailLength;
-    this.sceneManager.maxTrailLength = initialTrailLength; // Ensure SceneManager is updated
-    this.trailLengthValue.textContent = `${String(this.trailLengthSlider.value).padStart(3, '0')} points`;
+    // File Picker - Get from HTML
+    this.filePicker = document.getElementById('filePicker');
+    this.filePicker.value = 'data/fish.json'; // ARPlayback loads data/fish.json by default.
+
+    let initialTrailLength = parseInt(this.trailLengthSlider.value, 10);
+    this.sceneManager.maxTrailLength = initialTrailLength; // Sync SceneManager to what the slider HTML shows
+    this.trailLengthValue.textContent = `${String(initialTrailLength).padStart(3, '0')} points`;
   }
 
   setupEventListeners() {
@@ -54,7 +59,8 @@ export class ControlsManager {
     this.timelineSlider.addEventListener('input', (e) => this.ontimelineSliderChange(e));
     this.speedSlider.addEventListener('input', (e) => this.onSpeedChange(e));
     this.trailLengthSlider.addEventListener('input', (e) => this.onTrailLengthChange(e));
-    window.addEventListener('keydown', (e) => this.handleKeydown(e)); // Added for spacebar
+    this.filePicker.addEventListener('change', (e) => this.onFilePickerChange(e));
+    window.addEventListener('keydown', (e) => this.handleKeydown(e));
   }
 
   handleKeydown(event) {
@@ -131,6 +137,11 @@ export class ControlsManager {
     const newLength = parseInt(event.target.value, 10);
     this.sceneManager.maxTrailLength = newLength;
     this.trailLengthValue.textContent = `${String(newLength).padStart(3, '0')} points`;
+  }
+
+  onFilePickerChange(event) {
+    const newFilename = event.target.value;
+    this.onFileSelected(newFilename); // Directly call, assuming it's always defined
   }
 
   formatTime(seconds) {

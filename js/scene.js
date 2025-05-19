@@ -15,6 +15,7 @@ export class SceneManager {
     this.entityTrails = new Map(); // Stores trail data for each entity: { entityId: { line: THREE.Line, points: THREE.Vector3[] } }
     this.maxTrailLength = 200; // Maximum number of points to store for an entity's trail (formerly initialTrailLength)
     this.roomData = null; // Stores the loaded room data from export.json
+    this.currentDatasetType = 'fish'; // Type of dataset currently loaded ("fish", "spider", "butterfly")
     this.currentFrameIndex = 0; // Index of the currently displayed frame
     this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered room meshes
     this.handUpdates = []; // Array of hand update data, sorted by timestamp
@@ -92,30 +93,35 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
-  async loadRoomData() {
+  async loadRoomData(filename = "data/fish.json") { // Default to data/fish.json
     try {
+      // Extract type from filename (e.g., "data/fish.json" -> "fish")
+      const parts = filename.split('/');
+      this.currentDatasetType = parts[parts.length - 1].replace('.json', '');
+      console.log(`SceneManager: Loading data from ${filename}, dataset type: ${this.currentDatasetType}`);
+
       // Add cache-busting query parameter with current timestamp
       const cacheBuster = `?t=${new Date().getTime()}`;
-      const response = await fetch('export.json' + cacheBuster, {
+      const response = await fetch(filename + cacheBuster, {
         cache: 'no-store' // Force bypass of cache
       });
       
       if (!response.ok) {
-        console.error(`HTTP error loading room data: ${response.status} ${response.statusText}`);
+        console.error(`HTTP error loading room data from ${filename}: ${response.status} ${response.statusText}`);
         throw new Error(`HTTP error: ${response.status}`);
       }
       
       this.roomData = await response.json();
       
       // Assuming this.roomData.handUpdates is always an array and pre-sorted by timestamp as per user guidance
-      this.handUpdates = this.roomData.handUpdates;
+      this.handUpdates = this.roomData.handUpdates || []; // Ensure handUpdates exists
       
       // Set up frames for player
       this.setupFrames();
       
       return this.roomData;
     } catch (error) {
-      console.error('Error loading room data:', error);
+      console.error(`Error loading room data from ${filename}:`, error);
       throw error;
     }
   }
@@ -319,7 +325,7 @@ export class SceneManager {
             }
           }
            const entityType = entityData.type || 'default';
-           const entityColors = this._getEntityColors(); 
+           const entityColors = this.getEntityColors(); 
            const newColor = entityColors[entityType] || entityColors['default'];
            if (existingEntityMesh.material.color.getHex() !== newColor) {
              existingEntityMesh.material.color.setHex(newColor);
@@ -358,7 +364,7 @@ export class SceneManager {
           }
 
         } else {
-          const newEntityMesh = this._createEntityMesh(entityData);
+          const newEntityMesh = this.createEntityMesh(entityData);
           if (newEntityMesh) { 
             this.entityGroup.add(newEntityMesh);
             this.activeEntityMeshes.set(entityId, newEntityMesh); // Use entityId directly
@@ -387,18 +393,24 @@ export class SceneManager {
     this.meshGroup.add(roomLines);
   }
 
-  _getEntityColors() {
-    return {
-      'yellowtang': 0x00ff00,
-      'clownentity': 0xff0000,
-      'sardine': 0x0000ff,
-      'default': 0x808080    
-    };
+  getEntityColors() {
+    if (this.currentDatasetType === 'spider') {
+      return { 'default': 0xff0000 };
+    } else if (this.currentDatasetType === 'butterfly') {
+      return { 'default': 0xff0000 };
+    } else if (this.currentDatasetType === 'fish') {
+      return {
+        'yellowtang': 0x00ff00,
+        'clownfish': 0xff0000,
+        'sardine': 0x0000ff,
+        'default': 0x808080    
+      };
+    }
   }
 
-  _createEntityMesh(entityData) {
+  createEntityMesh(entityData) {
     // Assuming entityData always has id, position, and forward
-    const entityColors = this._getEntityColors();
+    const entityColors = this.getEntityColors();
     const entityType = entityData.type || 'default'; // Type might be optional, default is good
     const color = entityColors[entityType] || entityColors['default'];
     const scale = 0.3; 
