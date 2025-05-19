@@ -16,11 +16,6 @@ class ARPlayback {
   async init() {
     try {
       const sceneData = await this.sceneManager.loadRoomData(this.defaultFileName);
-
-      if (sceneData.frames.length === 0) {
-        console.error("No frame data available after loading."); 
-        return;
-      }
       
       this.controlsManager.setFrames(sceneData.frames);
       this.sceneManager.updateFrame(0);
@@ -33,23 +28,23 @@ class ARPlayback {
   }
 
   async loadNewDataset(filename) {
-    console.log(`ARPlayback: Attempting to load new dataset - ${filename}`);
+    this.controlsManager.isPlaying = false;
+    this.controlsManager.updateUI();
+
     this.sceneManager.resetSceneState();
 
     try {
       const sceneData = await this.sceneManager.loadRoomData(filename);
 
-      if (!sceneData || !sceneData.frames || sceneData.frames.length === 0) {
-        console.error(`No frame data available after loading ${filename}.`);
-        this.controlsManager.setFrames([]);
-        return;
-      }
-
       this.controlsManager.setFrames(sceneData.frames);
       this.sceneManager.updateFrame(0);
-      if (this.controlsManager.isPlaying) {
-        this.controlsManager.play();
-      }
+
+      this.controlsManager.isPlaying = false;
+      this.controlsManager.playbackSpeed = 1.0;
+      this.controlsManager.speedSlider.value = this.controlsManager.playbackSpeed;
+      this.controlsManager.speedValue.textContent = this.controlsManager.playbackSpeed.toFixed(1) + 'x';
+      this.controlsManager.updateUI();
+
       this.sceneManager.render();
 
     } catch (error) {

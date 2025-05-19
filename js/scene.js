@@ -15,7 +15,6 @@ export class SceneManager {
     this.entityTrails = new Map(); // Stores trail data for each entity: { entityId: { line: THREE.Line, points: THREE.Vector3[] } }
     this.maxTrailLength = 200; // Maximum number of points to store for an entity's trail (formerly initialTrailLength)
     this.roomData = null; // Stores the loaded room data from export.json
-    this.currentDatasetType = 'fish'; // Type of dataset currently loaded ("fish", "spider", "butterfly")
     this.currentFrameIndex = 0; // Index of the currently displayed frame
     this.renderedMeshStates = new Map(); // Stores { id: timestamp } of currently rendered room meshes
     this.handUpdates = []; // Array of hand update data, sorted by timestamp
@@ -93,13 +92,8 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
-  async loadRoomData(filename = "data/fish.json") { // Default to data/fish.json
+  async loadRoomData(filename = "data/fish.json") {
     try {
-      // Extract type from filename (e.g., "data/fish.json" -> "fish")
-      const parts = filename.split('/');
-      this.currentDatasetType = parts[parts.length - 1].replace('.json', '');
-      console.log(`SceneManager: Loading data from ${filename}, dataset type: ${this.currentDatasetType}`);
-
       // Add cache-busting query parameter with current timestamp
       const cacheBuster = `?t=${new Date().getTime()}`;
       const response = await fetch(filename + cacheBuster, {
@@ -113,7 +107,6 @@ export class SceneManager {
       
       this.roomData = await response.json();
       
-      // Assuming this.roomData.handUpdates is always an array and pre-sorted by timestamp as per user guidance
       this.handUpdates = this.roomData.handUpdates || []; // Ensure handUpdates exists
       
       // Set up frames for player
@@ -128,7 +121,6 @@ export class SceneManager {
 
   // Create frames array for playback
   setupFrames() {
-    // Assuming this.roomData and this.roomData.entityFrames are always available and entityFrames is an array
     this.roomData.frames = this.roomData.entityFrames.map((frame, index) => {
       return {
         index: index,
@@ -138,10 +130,8 @@ export class SceneManager {
   }
 
   updateFrame(frameIndex) {
-    // Assuming this.roomData.frames is always an array
     const frameCount = this.roomData.frames.length;
     if (frameCount === 0 || frameIndex < 0 || frameIndex >= frameCount) {
-      // It's still good to keep this check for frameIndex bounds
       console.error('Invalid frame index:', frameIndex, 'max:', frameCount - 1);
       return;
     }
@@ -160,7 +150,6 @@ export class SceneManager {
     // renderedMeshStates is initialized in the constructor
     const latestMeshesById = new Map();
 
-    // Assuming this.roomData.meshUpdates is always an array
     if (this.roomData.meshUpdates.length === 0) {
         if (this.renderedMeshStates.size > 0) {
             this.clearMeshGroup();
@@ -170,7 +159,6 @@ export class SceneManager {
     }
 
     // Populate latestMeshesById from roomData.meshUpdates
-    // Assuming meshUpdate objects always have id and timestamp
     for (const meshUpdate of this.roomData.meshUpdates) {
         if (meshUpdate.timestamp <= timestamp) {
             if (!latestMeshesById.has(meshUpdate.id) ||
@@ -204,7 +192,6 @@ export class SceneManager {
     this.clearMeshGroup(); 
     const newRenderedStates = new Map();
 
-    // Assuming meshData always has vertices and faces when createRoom is called
     if (latestMeshesById.size > 0) {
         latestMeshesById.forEach(meshData => {
             this.createRoom(meshData); 
@@ -230,7 +217,6 @@ export class SceneManager {
   }
 
   updateEntity(frameIndex, timestamp) {
-    // Assuming this.roomData.entityFrames is always an array
     if (this.roomData.entityFrames.length === 0) {
       if (this.activeEntityMeshes.size > 0) {
         this.activeEntityMeshes.forEach(entityMesh => {
@@ -297,14 +283,12 @@ export class SceneManager {
     entityDataForCurrentTimestamp = closestFrameData && Array.isArray(closestFrameData.entityStates) ? closestFrameData.entityStates : [];
 
     const currentFrameEntityIds = new Set();
-    // Assuming entityData in entityDataForCurrentTimestamp always has an ID
     if (entityDataForCurrentTimestamp) {
       entityDataForCurrentTimestamp.forEach(entityData => {
         currentFrameEntityIds.add(entityData.id);
       });
     }
 
-    // Assuming entityData always has id, position, and forward
     if (entityDataForCurrentTimestamp) {
       entityDataForCurrentTimestamp.forEach(entityData => {
         const entityId = entityData.id; // Get entityId here for easier access
@@ -378,7 +362,6 @@ export class SceneManager {
   }
 
   createRoom(meshData) {
-    // Assuming meshData always has vertices and faces
     const geometry = new THREE.BufferGeometry();
     const vertices = new Float32Array(meshData.vertices.flat());
     const indices = new Uint32Array(meshData.faces.flat());
@@ -394,22 +377,15 @@ export class SceneManager {
   }
 
   getEntityColors() {
-    if (this.currentDatasetType === 'spider') {
-      return { 'default': 0xff0000 };
-    } else if (this.currentDatasetType === 'butterfly') {
-      return { 'default': 0xff0000 };
-    } else if (this.currentDatasetType === 'fish') {
-      return {
-        'yellowtang': 0x00ff00,
-        'clownfish': 0xff0000,
-        'sardine': 0x0000ff,
-        'default': 0x808080    
-      };
-    }
+    return {
+      'yellowtang': 0x00ff00,
+      'clownfish': 0xff0000,
+      'sardine': 0x0000ff,
+      'default': 0xff0000    
+    };
   }
 
   createEntityMesh(entityData) {
-    // Assuming entityData always has id, position, and forward
     const entityColors = this.getEntityColors();
     const entityType = entityData.type || 'default'; // Type might be optional, default is good
     const color = entityColors[entityType] || entityColors['default'];
@@ -440,9 +416,6 @@ export class SceneManager {
   }
 
   updateHands(timestamp) {
-    // handVisuals are initialized in the constructor
-    // Assuming this.handUpdates is always an array (and pre-sorted)
-
     let latestLeftHandUpdate = null;
     let latestRightHandUpdate = null;
 
@@ -464,7 +437,6 @@ export class SceneManager {
       }
     }
     
-    // Assuming latestLeftHandUpdate.position is always a valid 3-element number array if latestLeftHandUpdate exists
     if (latestLeftHandUpdate) {
       this.handVisuals.left.position.set(
         latestLeftHandUpdate.position[0], 
@@ -476,7 +448,6 @@ export class SceneManager {
       this.handVisuals.left.visible = false;
     }
 
-    // Assuming latestRightHandUpdate.position is always a valid 3-element number array if latestRightHandUpdate exists
     if (latestRightHandUpdate) {
       this.handVisuals.right.position.set(
         latestRightHandUpdate.position[0], 
@@ -501,18 +472,18 @@ export class SceneManager {
           entityMesh.material.dispose();
         }
       }
-      this.entityGroup.remove(entityMesh);
     });
     this.activeEntityMeshes.clear();
+    this.entityGroup.clear(); // Clear children from the group
 
     // Clear entity trails
     this.entityTrails.forEach((trail, entityId) => {
       if (trail.line) {
         if (trail.line.geometry) trail.line.geometry.dispose();
         if (trail.line.material) trail.line.material.dispose();
-        this.trailGroup.remove(trail.line);
       }
     });
     this.entityTrails.clear();
+    this.trailGroup.clear(); // Clear children from the group
   }
 } 

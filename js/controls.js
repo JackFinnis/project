@@ -45,7 +45,7 @@ export class ControlsManager {
 
     // File Picker - Get from HTML
     this.filePicker = document.getElementById('filePicker');
-    this.filePicker.value = 'data/fish.json'; // ARPlayback loads data/fish.json by default.
+    this.filePicker.value = 'data/fish.json';
 
     let initialTrailLength = parseInt(this.trailLengthSlider.value, 10);
     this.sceneManager.maxTrailLength = initialTrailLength; // Sync SceneManager to what the slider HTML shows
@@ -130,7 +130,6 @@ export class ControlsManager {
   onSpeedChange(event) {
     this.playbackSpeed = parseFloat(event.target.value);
     this.speedValue.textContent = this.playbackSpeed.toFixed(1) + 'x';
-    // No frameInterval to update anymore
   }
 
   onTrailLengthChange(event) {
@@ -141,7 +140,7 @@ export class ControlsManager {
 
   onFilePickerChange(event) {
     const newFilename = event.target.value;
-    this.onFileSelected(newFilename); // Directly call, assuming it's always defined
+    this.onFileSelected(newFilename);
   }
 
   formatTime(seconds) {
@@ -187,7 +186,6 @@ export class ControlsManager {
 
   setFrames(frames) {
     this.frames = Array.isArray(frames) ? frames : [];
-    // console.log(`ControlsManager: Setting up with ${this.frames.length} frames`);
     
     const hasFrames = this.frames.length > 0;
     
