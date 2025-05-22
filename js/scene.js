@@ -400,7 +400,7 @@ export class SceneManager {
   createEntityMesh(entityData) {
     const entityColors = this.getEntityColors();
     const entityType = entityData.type || 'default'; // Type might be optional, default is good
-    const color = entityColors[entityType] || entityColors['default'];
+    const color = entityColors[entityType];
     const scale = 0.3; 
 
     const entityGeometry = new THREE.ConeGeometry(0.3 * scale, 0.8 * scale, 8);

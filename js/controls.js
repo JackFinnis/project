@@ -6,7 +6,7 @@ export class ControlsManager {
     this.isPlaying = true; // Boolean state indicating if playback is currently active
     this.frameIndex = 0; // Current frame index in the playback sequence
     this.playbackSpeed = 1.0; // Multiplier for playback speed (1.0 is normal speed)
-    this.skipAmountFrames = 30; // Number of frames to jump forward/backward with arrow keys
+    this.skipAmountFrames = 100; // Number of frames to jump forward/backward with arrow keys
     
     this.lastRealWorldTime = 0; // Timestamp of the last `performance.now()` call, used for calculating delta time
     this.elapsedMovieTime = 0;  // Accumulated time within the movie's own timelineSlider, scaled by speed
@@ -56,7 +56,7 @@ export class ControlsManager {
     window.addEventListener('resize', () => this.sceneManager.onWindowResize());
     this.playPauseButton.addEventListener('click', () => this.togglePlayPause());
     this.resetButton.addEventListener('click', () => this.resetPlayback());
-    this.timelineSlider.addEventListener('input', (e) => this.ontimelineSliderChange(e));
+    this.timelineSlider.addEventListener('input', (e) => this.onTimelineSliderChange(e));
     this.speedSlider.addEventListener('input', (e) => this.onSpeedChange(e));
     this.trailLengthSlider.addEventListener('input', (e) => this.onTrailLengthChange(e));
     this.filePicker.addEventListener('change', (e) => this.onFilePickerChange(e));
@@ -112,7 +112,7 @@ export class ControlsManager {
     // The main update loop advances elapsedMovieTime based on realWorldElapsed * playbackSpeed.
   }
 
-  ontimelineSliderChange(event) {
+  onTimelineSliderChange(event) {
     const newFrameIndex = parseInt(event.target.value);
     if (newFrameIndex >= 0 && newFrameIndex < this.frames.length) {
         // Removing resetSceneState() to allow incremental updates during scrubbing,
