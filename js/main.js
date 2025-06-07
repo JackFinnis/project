@@ -1,6 +1,7 @@
 import { SceneManager } from './scene.js';
 import { ControlsManager } from './controls.js';
 
+// Main class that initializes the scene and controls managers and starts the render loop
 class ARPlayback {
   constructor() {
     this.sceneManager = new SceneManager();
@@ -13,6 +14,7 @@ class ARPlayback {
     this.init();
   }
 
+  // Setup the scene data and controls
   _setupSceneData(sceneData) {
     this.controlsManager.setFrames(sceneData.frames);
     this.sceneManager.updateFrame(0);
@@ -29,6 +31,7 @@ class ARPlayback {
     }
   }
 
+  // Load a new dataset and update the scene
   async loadNewDataset(filename) {
     // Explicitly stop playback and update UI before any async operations or scene resets.
     // This helps prevent the animation loop from advancing based on old data while new data loads.

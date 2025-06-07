@@ -1,3 +1,4 @@
+// Handle events driven by the visual controls on the website
 export class ControlsManager {
   constructor(sceneManager, onFrameUpdate, onFileSelectedCallback) {
     this.sceneManager = sceneManager; // Instance of SceneManager to interact with the 3D scene
@@ -63,6 +64,7 @@ export class ControlsManager {
     window.addEventListener('keydown', (e) => this.handleKeydown(e));
   }
 
+  // Handle keyboard playback controls
   handleKeydown(event) {
     if (event.code === 'Space') {
       event.preventDefault(); // Prevent default spacebar action (e.g., scrolling, button click if focused)
@@ -112,6 +114,7 @@ export class ControlsManager {
     // The main update loop advances elapsedMovieTime based on realWorldElapsed * playbackSpeed.
   }
 
+  // Update the frame index when user is scrubbing the timeline slider
   onTimelineSliderChange(event) {
     const newFrameIndex = parseInt(event.target.value);
     if (newFrameIndex >= 0 && newFrameIndex < this.frames.length) {
@@ -150,6 +153,7 @@ export class ControlsManager {
     return seconds.toFixed(1) + "s";
   }
 
+  // Update the UI elements to reflect the current state of the playback
   updateUI() {
     this.timelineSlider.value = this.frameIndex;
     this.playPauseButton.textContent = this.isPlaying ? 'Pause' : 'Play';
@@ -205,6 +209,7 @@ export class ControlsManager {
     }
   }
 
+  // Set the frames to be displayed in the visualizer
   setFrames(frames) {
     this.frames = Array.isArray(frames) ? frames : [];
     
@@ -245,6 +250,7 @@ export class ControlsManager {
     this.updateUI(); // updateUI will set playPauseButton text and timeline value
   }
 
+  // Update the playback based on the current real-world time
   update(currentRealWorldTime) {
     if (!this.isPlaying || this.frames.length === 0) {
       return;
@@ -311,6 +317,7 @@ export class ControlsManager {
     }
   }
 
+  // Skip a number of frames forward or backward
   skipFrames(framesToSkip) {
     if (this.frames.length === 0) return; // Do nothing if no frames
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Class that manages the 3D scene and updates the entities and room meshes based on the current frame
 export class SceneManager {
   constructor() {
     this.scene = new THREE.Scene(); // Main Three.js scene object
@@ -70,6 +71,7 @@ export class SceneManager {
     this.handsGroup.add(this.handVisuals.right);
   }
 
+  // Setup the lighting for the scene so entities are visible with shading
   setupLighting() {
     const ambientLight = new THREE.AmbientLight(0x404040);
     this.scene.add(ambientLight);
@@ -93,6 +95,7 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // Load the room data from the JSON file
   async loadRoomData(filename = "data/fish.json") {
     try {
       // Add cache-busting query parameter with current timestamp
@@ -130,6 +133,7 @@ export class SceneManager {
     });
   }
 
+  // Update the frame shown in the scene
   updateFrame(frameIndex) {
     const frameCount = this.roomData.frames.length;
     if (frameCount === 0 || frameIndex < 0 || frameIndex >= frameCount) {
@@ -147,6 +151,7 @@ export class SceneManager {
     this.currentFrameIndex = frameIndex;
   }
 
+  // Update the meshes in the scene to the most recent mesh state version given the timestamp
   updateMesh(timestamp) {
     const latestMeshesById = new Map();
 
@@ -247,7 +252,7 @@ export class SceneManager {
     this.meshGroup.clear();
   }
 
-  updateEntity(frameIndex, timestamp) {
+  updateEntity(frameIndex) {
     if (this.roomData.entityFrames.length === 0) {
       if (this.activeEntityMeshes.size > 0) {
         this.activeEntityMeshes.forEach(entityMesh => {
@@ -367,6 +372,7 @@ export class SceneManager {
     }
   }
 
+  // Render the room mesh as a wireframe
   createRoom(meshData) {
     const geometry = new THREE.BufferGeometry();
     const vertices = new Float32Array(meshData.vertices.flat());
@@ -388,6 +394,7 @@ export class SceneManager {
     return roomLines;
   }
 
+  // Get the color for an entity based on its type
   getEntityColors() {
     return {
       'yellowtang': 0x00ff00,
@@ -397,6 +404,7 @@ export class SceneManager {
     };
   }
 
+  // Create a cone mesh for an entity
   createEntityMesh(entityData) {
     const entityColors = this.getEntityColors();
     const entityType = entityData.type || 'default'; // Type might be optional, default is good
@@ -427,6 +435,7 @@ export class SceneManager {
     return entityMesh;
   }
 
+  // Update the hands in the scene to the most recent hand state given the timestamp
   updateHands(timestamp) {
     let latestLeftHandUpdate = null;
     let latestRightHandUpdate = null;
@@ -472,7 +481,7 @@ export class SceneManager {
     }
   }
 
-  // Method to clear all dynamic scene elements (entity and trails)
+  // Clear all dynamic scene elements (entity and trails)
   resetSceneState() {
     // Clear active entity meshes
     this.activeEntityMeshes.forEach((entityMesh, entityId) => {
